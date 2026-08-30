@@ -1,0 +1,6 @@
+{
+  "name": "Top 50 AI Crypto Trading Bot Arena",
+  "description": "24/7 autonomous multi-timeframe trading arena featuring 50 self-evolving AI trading bots with neural learning brains, strict risk management, live CMC top crypto feeds, equity curves, and automated Telegram reporting.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
