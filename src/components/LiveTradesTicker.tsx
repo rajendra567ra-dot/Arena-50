@@ -54,9 +54,20 @@ export const LiveTradesTicker: React.FC<LiveTradesTickerProps> = ({ liveTrades, 
                     {trade.botName.split(' ')[0]}
                   </span>
                   <span className="font-bold text-white text-xs tracking-tight">{trade.symbol}</span>
+                  <span className="rounded bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 px-1 py-0.2 text-[9px] font-bold" title="Only trades with >= 8/10 strict confirmation rules are executed">
+                    {trade.setupGrade || 'A+'} ({trade.confirmedRulesCount || 8}/10)
+                  </span>
                 </div>
 
                 <div className="flex items-center space-x-1">
+                  {trade.leverage && (
+                    <span
+                      title={trade.leverageReason || `${trade.leverage}x Dynamic Leverage`}
+                      className="rounded bg-amber-500/20 text-amber-300 border border-amber-500/30 px-1.5 py-0.5 text-[10px] font-bold font-mono"
+                    >
+                      {trade.leverage}x
+                    </span>
+                  )}
                   <span
                     className={`flex items-center rounded px-1.5 py-0.5 text-[10px] font-bold ${
                       isLong
@@ -95,10 +106,43 @@ export const LiveTradesTicker: React.FC<LiveTradesTickerProps> = ({ liveTrades, 
                 </div>
               </div>
 
-              {/* Stop Loss & Take Profit Bar */}
+              {/* Multi-Stage TP1 / TP2 / Runner Progress Tags */}
+              <div className="mt-2 flex flex-wrap gap-1 text-[9px] font-mono">
+                {trade.tp1Hit ? (
+                  <span className="rounded bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 px-1.5 py-0.2 font-bold flex items-center space-x-1">
+                    <span>🎯 TP1 (35% Booked)</span>
+                  </span>
+                ) : (
+                  <span className="rounded bg-slate-800/80 text-slate-400 px-1.5 py-0.2">
+                    TP1: ${trade.tp1Price}
+                  </span>
+                )}
+
+                {trade.tp2Hit ? (
+                  <span className="rounded bg-cyan-500/20 text-cyan-300 border border-cyan-500/30 px-1.5 py-0.2 font-bold flex items-center space-x-1">
+                    <span>🚀 TP2 (25% Booked)</span>
+                  </span>
+                ) : (
+                  <span className="rounded bg-slate-800/80 text-slate-400 px-1.5 py-0.2">
+                    TP2: ${trade.tp2Price}
+                  </span>
+                )}
+
+                {trade.runnerActive && (
+                  <span className="rounded bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 px-1.5 py-0.2 font-bold">
+                    🏃 40% Runner
+                  </span>
+                )}
+              </div>
+
+              {/* Stop Loss & Trailing Bar */}
               <div className="mt-2 flex items-center justify-between border-t border-slate-800/80 pt-1.5 text-[10px] text-slate-400 font-mono">
-                <span className="text-rose-400">SL: ${trade.stopLoss}</span>
-                <span className="text-emerald-400">TP: ${trade.takeProfit}</span>
+                <span className={trade.tp1Hit ? "text-emerald-400 font-bold" : "text-rose-400"}>
+                  SL: ${trade.stopLoss} {trade.tp1Hit && "(BE)"}
+                </span>
+                {trade.trailingStopPrice && (
+                  <span className="text-indigo-300">Trail: ${trade.trailingStopPrice}</span>
+                )}
                 <span className="text-slate-500 flex items-center">
                   <Clock className="mr-0.5 h-2.5 w-2.5" />
                   {timeElapsed}s

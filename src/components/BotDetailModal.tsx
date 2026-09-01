@@ -15,7 +15,8 @@ import {
   ArrowUpRight, 
   ArrowDownRight,
   AlertTriangle,
-  Award
+  Award,
+  CheckCircle2
 } from 'lucide-react';
 import { Bot, Trade } from '../types';
 import { api } from '../services/api';
@@ -292,7 +293,7 @@ export const BotDetailModal: React.FC<BotDetailModalProps> = ({
                   </div>
                 </div>
 
-                <div className="mt-4 grid grid-cols-1 sm:grid-cols-3 gap-3 border-t border-slate-800/80 pt-3 text-xs text-slate-400">
+                <div className="mt-4 grid grid-cols-2 sm:grid-cols-4 gap-3 border-t border-slate-800/80 pt-3 text-xs text-slate-400">
                   <div>
                     <span className="text-slate-500">Min Confidence Gate:</span>{' '}
                     <strong className="text-white font-mono">{bot.strategy.minConfidenceToTrade}%</strong>
@@ -300,6 +301,10 @@ export const BotDetailModal: React.FC<BotDetailModalProps> = ({
                   <div>
                     <span className="text-slate-500">Target Risk/Reward:</span>{' '}
                     <strong className="text-emerald-400 font-mono">{bot.strategy.riskRewardRatio}:1 R</strong>
+                  </div>
+                  <div>
+                    <span className="text-slate-500">Dynamic Leverage:</span>{' '}
+                    <strong className="text-amber-300 font-mono">2x - {bot.strategy.maxLeverage || 25}x</strong>
                   </div>
                   <div>
                     <span className="text-slate-500">Timeframe:</span>{' '}
@@ -442,25 +447,121 @@ export const BotDetailModal: React.FC<BotDetailModalProps> = ({
           {activeTab === 'TRADES' && (
             <div className="space-y-4">
               
-              {/* Active Trade if any */}
-              {bot.activeTrade && (
-                <div className="rounded-xl border border-cyan-800/60 bg-cyan-950/30 p-4">
-                  <div className="flex items-center justify-between text-xs font-bold text-cyan-300 mb-2">
-                    <span className="flex items-center">
-                      <Zap className="mr-1.5 h-4 w-4 animate-spin text-cyan-400" />
-                      Live Active Position
-                    </span>
-                    <span className="font-mono">${bot.activeTrade.capitalAllocated} Allocated (5% Max)</span>
-                  </div>
+              {/* Active Trades if any */}
+              {(() => {
+                const activeList = bot.activeTrades && bot.activeTrades.length > 0 
+                  ? bot.activeTrades 
+                  : (bot.activeTrade ? [bot.activeTrade] : []);
 
-                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs font-mono">
-                    <div className="bg-slate-900/60 p-2 rounded">Symbol: <strong className="text-white">{bot.activeTrade.symbol}</strong></div>
-                    <div className="bg-slate-900/60 p-2 rounded">Direction: <strong className={bot.activeTrade.direction === 'LONG' ? 'text-emerald-400' : 'text-rose-400'}>{bot.activeTrade.direction}</strong></div>
-                    <div className="bg-slate-900/60 p-2 rounded">Entry: ${bot.activeTrade.entryPrice}</div>
-                    <div className="bg-slate-900/60 p-2 rounded">Live PnL: <strong className={bot.activeTrade.pnl >= 0 ? 'text-emerald-400' : 'text-rose-400'}>${bot.activeTrade.pnl.toFixed(2)}</strong></div>
+                if (activeList.length === 0) return null;
+
+                return (
+                  <div className="space-y-3">
+                    <div className="text-xs font-bold text-cyan-300 flex items-center justify-between">
+                      <span className="flex items-center">
+                        <Zap className="mr-1.5 h-4 w-4 animate-spin text-cyan-400" />
+                        Live Active Positions ({activeList.length} Concurrent {activeList.length === 1 ? 'Trade' : 'Trades'})
+                      </span>
+                      <span className="text-slate-400 font-mono text-[11px]">
+                        Total Margin: ${(activeList.reduce((acc, t) => acc + t.capitalAllocated, 0)).toFixed(2)}
+                      </span>
+                    </div>
+
+                    {activeList.map((activeTrade) => (
+                      <div key={activeTrade.id} className="rounded-xl border border-cyan-800/60 bg-cyan-950/30 p-4">
+                        <div className="flex items-center justify-between text-xs font-bold text-cyan-300 mb-2">
+                          <span className="flex items-center">
+                            <span className={`mr-2 px-1.5 py-0.5 rounded text-[10px] font-bold ${activeTrade.direction === 'LONG' ? 'bg-emerald-950 text-emerald-300 border border-emerald-500/40' : 'bg-rose-950 text-rose-300 border border-rose-500/40'}`}>
+                              {activeTrade.direction}
+                            </span>
+                            {activeTrade.symbol} ({activeTrade.leverage || 5}x Dynamic Leverage)
+                          </span>
+                          <div className="flex items-center space-x-2">
+                            <span className="rounded bg-emerald-950 border border-emerald-500/50 px-2 py-0.5 text-[10px] font-bold text-emerald-300">
+                              Grade {activeTrade.setupGrade || 'A+'} Setup
+                            </span>
+                            <span className="font-mono text-slate-300">${activeTrade.capitalAllocated} Margin (${(activeTrade.capitalAllocated * (activeTrade.leverage || 5)).toFixed(2)} Notional)</span>
+                          </div>
+                        </div>
+
+                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs font-mono">
+                          <div className="bg-slate-900/60 p-2 rounded">Symbol: <strong className="text-white">{activeTrade.symbol}</strong></div>
+                          <div className="bg-slate-900/60 p-2 rounded">Direction: <strong className={activeTrade.direction === 'LONG' ? 'text-emerald-400' : 'text-rose-400'}>{activeTrade.direction} ({activeTrade.leverage || 5}x)</strong></div>
+                          <div className="bg-slate-900/60 p-2 rounded">Entry: ${activeTrade.entryPrice}</div>
+                          <div className="bg-slate-900/60 p-2 rounded">Live PnL: <strong className={activeTrade.pnl >= 0 ? 'text-emerald-400' : 'text-rose-400'}>${activeTrade.pnl.toFixed(2)}</strong></div>
+                        </div>
+
+                        {activeTrade.ruleResults && activeTrade.ruleResults.length > 0 ? (
+                          <div className="mt-3 rounded-lg bg-slate-900/90 p-3 border border-slate-800">
+                            <div className="flex items-center justify-between mb-2">
+                              <div className="text-[11px] font-bold text-cyan-300 flex items-center">
+                                <CheckCircle2 className="mr-1.5 h-4 w-4 text-emerald-400" />
+                                10 Strict Confirmation Rules Check ({activeTrade.confirmedRulesCount || 8}/10 Rules Confirmed - Trade Authorized)
+                              </div>
+                              <span className="rounded bg-emerald-950 border border-emerald-500/40 px-2 py-0.5 text-[10px] font-bold text-emerald-300">
+                                Threshold &gt;= 8 Passed
+                              </span>
+                            </div>
+
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-xs">
+                              {activeTrade.ruleResults.map((r) => (
+                                <div
+                                  key={r.id}
+                                  className={`rounded-md border p-2 text-[11px] font-mono transition-all ${
+                                    r.passed
+                                      ? 'border-emerald-500/30 bg-emerald-950/20 text-slate-200'
+                                      : 'border-slate-800 bg-slate-950/40 text-slate-400 opacity-60'
+                                  }`}
+                                >
+                                  <div className="flex items-center justify-between">
+                                    <span className="font-bold text-white flex items-center">
+                                      <span className="mr-1.5">{r.passed ? '✅' : '⚪'}</span>
+                                      #{r.id} {r.name}
+                                    </span>
+                                    <span
+                                      className={`rounded px-1.5 py-0.2 text-[9px] font-bold ${
+                                        r.passed ? 'bg-emerald-500/20 text-emerald-300' : 'bg-slate-800 text-slate-400'
+                                      }`}
+                                    >
+                                      {r.passed ? 'CONFIRMED' : 'NOT MET'}
+                                    </span>
+                                  </div>
+                                  <div className="mt-1 text-[10px] text-slate-400">
+                                    Condition: <span className="text-slate-300">{r.requiredCondition}</span>
+                                  </div>
+                                  <div className="mt-0.5 text-[10px] text-cyan-300">
+                                    Value: <span className="font-bold">{r.actualValue}</span>
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        ) : activeTrade.confirmations && activeTrade.confirmations.length > 0 && (
+                          <div className="mt-3 rounded-lg bg-slate-900/80 p-2.5 border border-slate-800">
+                            <div className="text-[11px] font-bold text-cyan-300 mb-1.5 flex items-center">
+                              <CheckCircle2 className="mr-1.5 h-3.5 w-3.5 text-emerald-400" />
+                              Verified Setup Confirmations ({activeTrade.confirmations.length} Rules Passed):
+                            </div>
+                            <div className="flex flex-wrap gap-1.5">
+                              {activeTrade.confirmations.map((conf, idx) => (
+                                <span key={idx} className="rounded bg-slate-950 border border-slate-700/60 px-2 py-0.5 text-[10px] font-mono text-slate-300">
+                                  ✓ {conf}
+                                </span>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+
+                        {activeTrade.leverageReason && (
+                          <div className="mt-2 text-[11px] text-amber-300/80 font-mono">
+                            ⚡ Leverage Context: {activeTrade.leverageReason}
+                          </div>
+                        )}
+                      </div>
+                    ))}
                   </div>
-                </div>
-              )}
+                );
+              })()}
 
               {/* Historical Trades Table */}
               <div className="rounded-xl border border-slate-800 bg-slate-950/60 overflow-hidden">
@@ -480,6 +581,7 @@ export const BotDetailModal: React.FC<BotDetailModalProps> = ({
                           <th className="p-2.5">Time</th>
                           <th className="p-2.5">Symbol</th>
                           <th className="p-2.5">Type</th>
+                          <th className="p-2.5">Lev</th>
                           <th className="p-2.5">Entry</th>
                           <th className="p-2.5">Exit</th>
                           <th className="p-2.5">PnL (USD)</th>
@@ -501,6 +603,11 @@ export const BotDetailModal: React.FC<BotDetailModalProps> = ({
                                   t.direction === 'LONG' ? 'bg-emerald-950 text-emerald-300' : 'bg-rose-950 text-rose-300'
                                 }`}>
                                   {t.direction}
+                                </span>
+                              </td>
+                              <td className="p-2.5">
+                                <span className="rounded bg-slate-800 px-1.5 py-0.5 text-[10px] text-amber-300 font-bold">
+                                  {t.leverage || 5}x
                                 </span>
                               </td>
                               <td className="p-2.5 text-slate-300">${t.entryPrice}</td>

@@ -7,7 +7,8 @@ import {
   ShieldCheck, 
   BrainCircuit, 
   DollarSign,
-  BarChart3
+  BarChart3,
+  RotateCcw
 } from 'lucide-react';
 import { Bot, Trade } from '../types';
 
@@ -15,9 +16,19 @@ interface ArenaStatsBannerProps {
   bots: Bot[];
   liveTrades: Trade[];
   onViewLiveTrades?: () => void;
+  onViewCmc500?: () => void;
+  totalCoinsCount?: number;
+  onOpenResetConfirm?: () => void;
 }
 
-export const ArenaStatsBanner: React.FC<ArenaStatsBannerProps> = ({ bots, liveTrades, onViewLiveTrades }) => {
+export const ArenaStatsBanner: React.FC<ArenaStatsBannerProps> = ({ 
+  bots, 
+  liveTrades, 
+  onViewLiveTrades,
+  onViewCmc500,
+  totalCoinsCount = 60,
+  onOpenResetConfirm
+}) => {
   const initialTotal = bots.length * 100; // $5000.00
   const currentTotal = bots.reduce((acc, b) => acc + b.currentBalance, 0);
   const netPnl = currentTotal - initialTotal;
@@ -135,23 +146,37 @@ export const ArenaStatsBanner: React.FC<ArenaStatsBannerProps> = ({ bots, liveTr
       <div className="mt-4 flex flex-wrap items-center justify-between gap-2 border-t border-slate-800/80 pt-3 text-xs text-slate-400">
         <div className="flex flex-wrap items-center gap-2 sm:gap-4">
           <div className="flex items-center space-x-1.5 text-slate-300">
-            <ShieldCheck className="h-4 w-4 text-cyan-400" />
-            <span>Strict Capital Allocation: <strong className="text-white">Max 5% / trade ($5 base)</strong></span>
+            <ShieldCheck className="h-4 w-4 text-emerald-400" />
+            <span>Strict Quality Gate: <strong className="text-emerald-300">10 Strict Rules (&ge;8 Confirmed Required)</strong></span>
           </div>
           <span className="hidden text-slate-600 sm:inline">•</span>
           <div className="flex items-center space-x-1.5 text-slate-300">
-            <span className="h-2 w-2 rounded-full bg-rose-500"></span>
-            <span>Stop-Loss Limit: <strong className="text-white">Max 3% loss ($3 max risk)</strong></span>
-          </div>
-          <span className="hidden text-slate-600 sm:inline">•</span>
-          <div className="flex items-center space-x-1.5 text-slate-300">
-            <BarChart3 className="h-4 w-4 text-indigo-400" />
-            <span>Execution Gate: <strong className="text-white">&gt;5 Indicators &amp; Multi-TF Confluence</strong></span>
+            <span className="h-2 w-2 rounded-full bg-cyan-400"></span>
+            <span>Quality Priority: <strong className="text-cyan-300">A+ Setups Only &bull; Zero Compulsory Trades</strong></span>
           </div>
         </div>
 
-        <div className="text-slate-500 italic">
-          High decimal sub-cent coins (BONK, SHIB, PEPE) strictly excluded
+        <div className="flex items-center space-x-2">
+          {onViewCmc500 && (
+            <button
+              onClick={onViewCmc500}
+              className="flex items-center space-x-1.5 rounded-lg border border-amber-500/30 bg-amber-950/30 px-2.5 py-1.5 text-xs font-bold text-amber-300 hover:bg-amber-900/40 transition-colors"
+            >
+              <span>CMC 500 Matrix ({totalCoinsCount}) &rarr;</span>
+            </button>
+          )}
+
+          {onOpenResetConfirm && (
+            <button
+              id="home-banner-reset-btn"
+              onClick={onOpenResetConfirm}
+              className="flex items-center space-x-1.5 rounded-lg border border-red-500/40 bg-red-950/50 px-3 py-1.5 text-xs font-bold text-red-300 hover:border-red-500 hover:bg-red-900/60 hover:text-white transition-all shadow-sm group"
+              title="Reset everything and start from 0 live trades ($100 starting balance per bot)"
+            >
+              <RotateCcw className="h-3.5 w-3.5 text-red-400 group-hover:rotate-180 transition-transform duration-500" />
+              <span>Reset to New (0 Live Trades)</span>
+            </button>
+          )}
         </div>
       </div>
     </section>

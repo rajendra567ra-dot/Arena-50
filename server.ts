@@ -75,6 +75,37 @@ async function startServer() {
     }
   });
 
+  // Engine Start / Pause / Toggle Controls
+  app.post('/api/engine/start', (req, res) => {
+    try {
+      tradingEngine.resumeEngine();
+      const state = tradingEngine.getArenaState();
+      res.json({ success: true, message: 'Autonomous live scanning started', state });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  app.post('/api/engine/pause', (req, res) => {
+    try {
+      tradingEngine.pauseEngine();
+      const state = tradingEngine.getArenaState();
+      res.json({ success: true, message: 'Autonomous live scanning paused', state });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  app.post('/api/engine/toggle', (req, res) => {
+    try {
+      const active = tradingEngine.toggleScanning();
+      const state = tradingEngine.getArenaState();
+      res.json({ success: true, isScanningActive: active, state });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
   // Reset ALL 50 bots to fresh $100
   app.post('/api/reset', (req, res) => {
     try {

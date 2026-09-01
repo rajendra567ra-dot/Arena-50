@@ -31,6 +31,24 @@ export const api = {
     return res.json();
   },
 
+  async startEngine(): Promise<{ success: boolean; state: ArenaState }> {
+    const res = await fetch('/api/engine/start', { method: 'POST' });
+    if (!res.ok) throw new Error('Failed to start engine');
+    return res.json();
+  },
+
+  async pauseEngine(): Promise<{ success: boolean; state: ArenaState }> {
+    const res = await fetch('/api/engine/pause', { method: 'POST' });
+    if (!res.ok) throw new Error('Failed to pause engine');
+    return res.json();
+  },
+
+  async toggleEngine(): Promise<{ success: boolean; isScanningActive: boolean; state: ArenaState }> {
+    const res = await fetch('/api/engine/toggle', { method: 'POST' });
+    if (!res.ok) throw new Error('Failed to toggle engine');
+    return res.json();
+  },
+
   async resetAllBots(): Promise<{ success: boolean; state: ArenaState }> {
     const res = await fetch('/api/reset', { method: 'POST' });
     if (!res.ok) throw new Error('Failed to reset all bots');

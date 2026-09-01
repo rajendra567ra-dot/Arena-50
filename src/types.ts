@@ -59,6 +59,15 @@ export interface MultiTimeframeAnalysis {
   confluenceScore: number; // 0 - 100
 }
 
+export interface ConfirmationRuleResult {
+  id: number;
+  name: string;
+  category: string;
+  passed: boolean;
+  actualValue: string;
+  requiredCondition: string;
+}
+
 export interface Trade {
   id: string;
   botId: string;
@@ -69,17 +78,34 @@ export interface Trade {
   currentPrice: number;
   exitPrice?: number;
   amount: number; // Coin amount
-  capitalAllocated: number; // Max 5% of bot balance
-  stopLoss: number; // Strict max 3% capital loss
+  capitalAllocated: number; // Initial capital margin (max 5% of bot balance)
+  remainingCapital?: number; // Remaining capital after TP1/TP2 partial bookings
+  leverage: number; // Dynamic leverage per trade (e.g., 2x, 3x, 5x, 8x, 10x, 15x, 20x, 25x)
+  leverageReason?: string; // Reason for chosen leverage (e.g., "20x High Confluence Tier-1 Trend")
+  stopLoss: number; // Dynamic SL (starts at initial SL -> moves to BE on TP1 -> moves to TP1 on TP2)
+  initialStopLoss?: number;
   takeProfit: number;
+  tp1Price: number; // Stage 1 TP (+1.8% to +2.5%) -> Books 35% profit & moves SL to Entry
+  tp2Price: number; // Stage 2 TP (+3.5% to +5.0%) -> Books 25% margin & moves SL to TP1
+  tp1Hit?: boolean;
+  tp2Hit?: boolean;
+  tp1RealizedPnl?: number;
+  tp2RealizedPnl?: number;
+  runnerActive?: boolean; // 40% runner remaining
   trailingStopPrice?: number;
+  trailingStructure?: string; // e.g. "Swing Low Break Structure" / "ATR 1.8x Trail"
   pnl: number;
   pnlPercent: number;
   status: TradeStatus;
   entryTime: number;
   exitTime?: number;
-  exitReason?: 'TAKE_PROFIT' | 'STOP_LOSS' | 'TRAILING_STOP' | 'SIGNAL_REVERSAL' | 'MANUAL_CLOSE' | 'AI_ADAPTATION';
+  exitReason?: 'TAKE_PROFIT' | 'STOP_LOSS' | 'TRAILING_STOP' | 'SIGNAL_REVERSAL' | 'MANUAL_CLOSE' | 'AI_ADAPTATION' | 'TP_RUNNER_EXIT';
   strategyUsed: string;
+  setupGrade?: 'A+' | 'A' | 'A-';
+  confirmations?: string[];
+  confirmedRulesCount?: number; // e.g. 8, 9, 10
+  totalRulesCount?: number; // 10
+  ruleResults?: ConfirmationRuleResult[];
   indicatorsAtEntry: {
     rsi: number;
     macdHistogram: number;
@@ -88,6 +114,7 @@ export interface Trade {
     timeframeConfluence: number;
   };
   aiReview?: string;
+  humanAdaptationNote?: string;
 }
 
 export interface LearnedLesson {
@@ -130,6 +157,8 @@ export interface BotStrategy {
   requiredIndicators: string[];
   minConfidenceToTrade: number; // e.g. 80
   riskRewardRatio: number; // e.g. 2.0
+  maxLeverage?: number; // e.g. 25
+  defaultLeverage?: number; // e.g. 10
   description: string;
 }
 
@@ -160,10 +189,12 @@ export interface Bot {
   brain: BrainMemory;
   equityCurve: EquityPoint[];
   activeTrade?: Trade | null;
+  activeTrades?: Trade[]; // Support multiple concurrent quality trades per bot
   tradeHistory: Trade[];
   isActive: boolean;
   createdAt: number;
   lastTradeTime?: number;
+  lastTradeCloseTime?: number;
 }
 
 export interface MarketCoin {
@@ -201,6 +232,9 @@ export interface ArenaState {
   marketStatus: 'LIVE_SYNCING' | 'RECONNECTING' | 'STABLE';
   lastEngineTick: number;
   uptimeSeconds: number;
+  cloudStartedAt: number;
+  isScanningActive: boolean;
+  engineMode: 'RUNNING' | 'PAUSED';
 }
 
 export type SortField = 'ALPHABETICAL' | 'WIN_RATE' | 'PORTFOLIO' | 'TOTAL_TRADES' | 'PNL_PERCENT' | 'BRAIN_LEVEL';

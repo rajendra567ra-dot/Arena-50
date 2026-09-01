@@ -21,7 +21,10 @@ interface BotCardProps {
 
 export const BotCard: React.FC<BotCardProps> = ({ bot, onSelect, onReset }) => {
   const isProfit = bot.totalPnl >= 0;
-  const hasActiveTrade = !!bot.activeTrade;
+  const activeTradesList = bot.activeTrades && bot.activeTrades.length > 0
+    ? bot.activeTrades
+    : (bot.activeTrade ? [bot.activeTrade] : []);
+  const hasActiveTrade = activeTradesList.length > 0;
 
   // Generate SVG path for mini equity curve
   const generateMiniSvgPath = () => {
@@ -160,17 +163,26 @@ export const BotCard: React.FC<BotCardProps> = ({ bot, onSelect, onReset }) => {
         </div>
 
         {/* Live Active Trade Snapshot if In Position */}
-        {hasActiveTrade && bot.activeTrade && (
-          <div className="mt-2.5 rounded-lg border border-cyan-900/50 bg-cyan-950/40 p-2 text-xs">
-            <div className="flex items-center justify-between font-mono">
-              <span className="flex items-center text-cyan-300 font-semibold">
-                <Zap className="mr-1 h-3 w-3 text-cyan-400 animate-spin" />
-                {bot.activeTrade.direction} {bot.activeTrade.symbol}
-              </span>
-              <span className={`font-bold ${bot.activeTrade.pnl >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
-                {bot.activeTrade.pnl >= 0 ? '+' : ''}${bot.activeTrade.pnl.toFixed(2)} ({bot.activeTrade.pnlPercent.toFixed(1)}%)
-              </span>
-            </div>
+        {hasActiveTrade && (
+          <div className="mt-2.5 rounded-lg border border-cyan-900/50 bg-cyan-950/40 p-2 text-xs space-y-1.5">
+            {activeTradesList.map((t) => (
+              <div key={t.id} className="flex items-center justify-between font-mono">
+                <span className="flex items-center text-cyan-300 font-semibold truncate mr-1">
+                  <Zap className="mr-1 h-3 w-3 text-cyan-400 shrink-0 animate-spin" />
+                  <span className={t.direction === 'LONG' ? 'text-emerald-400' : 'text-rose-400'}>{t.direction}</span>
+                  <span className="ml-1 text-white">{t.symbol}</span>
+                  <span className="ml-1.5 rounded bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 px-1 py-0.2 text-[9px] font-bold" title="Strict Confirmation Rule Score">
+                    {t.setupGrade || 'A+'} ({t.confirmedRulesCount || 8}/10)
+                  </span>
+                  <span className="ml-1 rounded bg-amber-500/20 text-amber-300 border border-amber-500/30 px-1 py-0.2 text-[9px] font-bold">
+                    {t.leverage || 5}x
+                  </span>
+                </span>
+                <span className={`font-bold shrink-0 ${t.pnl >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
+                  {t.pnl >= 0 ? '+' : ''}${t.pnl.toFixed(2)} ({t.pnlPercent.toFixed(1)}%)
+                </span>
+              </div>
+            ))}
           </div>
         )}
 

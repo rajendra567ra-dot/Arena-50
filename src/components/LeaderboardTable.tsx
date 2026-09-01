@@ -106,6 +106,9 @@ export const LeaderboardTable: React.FC<LeaderboardTableProps> = ({
                     <span className="flex items-center text-cyan-300 font-mono text-[11px] font-semibold">
                       <Zap className="mr-1 h-3 w-3 text-cyan-400 animate-spin" />
                       {bot.activeTrade.symbol} ({bot.activeTrade.direction})
+                      <span className="ml-1.5 rounded bg-amber-500/20 text-amber-300 border border-amber-500/30 px-1 py-0.2 text-[9px] font-bold">
+                        {bot.activeTrade.leverage || 5}x
+                      </span>
                     </span>
                   ) : (
                     <span className="text-[10px] text-slate-500">Idle (Scanning)</span>

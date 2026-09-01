@@ -6,11 +6,11 @@ import { ArenaStatsBanner } from './components/ArenaStatsBanner';
 import { RankingTabs } from './components/RankingTabs';
 import { BotCard } from './components/BotCard';
 import { BotDetailModal } from './components/BotDetailModal';
-import { LiveMarketScanner } from './components/LiveMarketScanner';
 import { TelegramConfigModal } from './components/TelegramConfigModal';
 import { ResetConfirmModal } from './components/ResetConfirmModal';
 import { LeaderboardTable } from './components/LeaderboardTable';
 import { AllTradesView } from './components/AllTradesView';
+import { Cmc500View } from './components/Cmc500View';
 import confetti from 'canvas-confetti';
 
 export default function App() {
@@ -20,6 +20,8 @@ export default function App() {
   const [tradeHistory, setTradeHistory] = useState<Trade[]>([]);
   const [telegramConfig, setTelegramConfig] = useState<TelegramConfig | undefined>(undefined);
   const [uptimeSeconds, setUptimeSeconds] = useState(0);
+  const [cloudStartedAt, setCloudStartedAt] = useState<number | undefined>(undefined);
+  const [isScanningActive, setIsScanningActive] = useState(true);
   const [marketStatus, setMarketStatus] = useState('LIVE_SYNCING');
   const [isLoading, setIsLoading] = useState(true);
 
@@ -35,7 +37,7 @@ export default function App() {
   const [searchQuery, setSearchQuery] = useState('');
   const [filterActiveOnly, setFilterActiveOnly] = useState(false);
   const [filterProfitableOnly, setFilterProfitableOnly] = useState(false);
-  const [activeView, setActiveView] = useState<'GRID' | 'TABLE' | 'ALL_TRADES' | 'MARKET'>('GRID');
+  const [activeView, setActiveView] = useState<'GRID' | 'TABLE' | 'ALL_TRADES' | 'CMC500'>('GRID');
 
   const previousTradesCount = useRef(0);
 
@@ -78,6 +80,8 @@ export default function App() {
       setLiveTrades(state.liveTrades);
       setTelegramConfig(state.telegramConfig);
       setUptimeSeconds(state.uptimeSeconds);
+      setCloudStartedAt(state.cloudStartedAt);
+      setIsScanningActive(state.isScanningActive !== undefined ? state.isScanningActive : true);
       setMarketStatus(state.marketStatus);
 
       // Check if new trade happened to play subtle audio
@@ -119,6 +123,19 @@ export default function App() {
     const tradeInterval = setInterval(fetchTrades, 4000);
     return () => clearInterval(tradeInterval);
   }, []);
+
+  // Handle Toggle Autonomous Engine Scanning
+  const handleToggleEngine = async () => {
+    try {
+      const res = await api.toggleEngine();
+      if (res.success) {
+        setIsScanningActive(res.isScanningActive);
+        setBots(res.state.bots);
+      }
+    } catch (err) {
+      console.error('Toggle engine error:', err);
+    }
+  };
 
   // Handle Reset All 50 Bots
   const handleConfirmResetAll = async () => {
@@ -188,7 +205,6 @@ export default function App() {
     // Sorting Modes
     switch (currentSort) {
       case 'ALPHABETICAL':
-        // Fixed numerical rank 1 to 50 alphabetically
         return result.sort((a, b) => a.alphabeticalRank - b.alphabeticalRank);
 
       case 'WIN_RATE':
@@ -220,38 +236,49 @@ export default function App() {
         onOpenResetConfirm={() => setIsResetConfirmOpen(true)}
         telegramConfig={telegramConfig}
         uptimeSeconds={uptimeSeconds}
+        cloudStartedAt={cloudStartedAt}
         marketStatus={marketStatus}
         soundEnabled={soundEnabled}
         onToggleSound={() => setSoundEnabled(!soundEnabled)}
         activeView={activeView}
         onViewChange={setActiveView}
         liveTradesCount={liveTrades.length}
+        totalCoinsCount={coins.length}
+        isScanningActive={isScanningActive}
+        onToggleEngine={handleToggleEngine}
       />
 
       {/* Main Arena Dashboard */}
-      <main className="mx-auto max-w-7xl px-4 py-6 sm:px-6 space-y-6">
+      <main className="mx-auto max-w-7xl px-3 sm:px-6 py-5 sm:py-6 space-y-6">
         
-        {/* Arena Statistics HUD */}
-        <ArenaStatsBanner 
-          bots={bots} 
-          liveTrades={liveTrades} 
-          onViewLiveTrades={() => setActiveView('ALL_TRADES')}
-        />
+        {/* Arena Statistics HUD (Visible on Home and Leaderboard views) */}
+        {(activeView === 'GRID' || activeView === 'TABLE') && (
+          <ArenaStatsBanner 
+            bots={bots} 
+            liveTrades={liveTrades} 
+            onViewLiveTrades={() => setActiveView('ALL_TRADES')}
+            onViewCmc500={() => setActiveView('CMC500')}
+            totalCoinsCount={coins.length}
+            onOpenResetConfirm={() => setIsResetConfirmOpen(true)}
+          />
+        )}
 
-        {/* Sorting, Search & View Controls */}
-        <RankingTabs
-          currentSort={currentSort}
-          onSortChange={setCurrentSort}
-          searchQuery={searchQuery}
-          onSearchChange={setSearchQuery}
-          filterActiveOnly={filterActiveOnly}
-          onToggleFilterActive={() => setFilterActiveOnly(!filterActiveOnly)}
-          filterProfitableOnly={filterProfitableOnly}
-          onToggleFilterProfitable={() => setFilterProfitableOnly(!filterProfitableOnly)}
-          activeView={activeView}
-          onViewChange={setActiveView}
-          botCount={liveTrades.length}
-        />
+        {/* Sorting, Search & View Controls (Home / Table view) */}
+        {(activeView === 'GRID' || activeView === 'TABLE') && (
+          <RankingTabs
+            currentSort={currentSort}
+            onSortChange={setCurrentSort}
+            searchQuery={searchQuery}
+            onSearchChange={setSearchQuery}
+            filterActiveOnly={filterActiveOnly}
+            onToggleFilterActive={() => setFilterActiveOnly(!filterActiveOnly)}
+            filterProfitableOnly={filterProfitableOnly}
+            onToggleFilterProfitable={() => setFilterProfitableOnly(!filterProfitableOnly)}
+            activeView={activeView}
+            onViewChange={setActiveView}
+            botCount={liveTrades.length}
+          />
+        )}
 
         {/* Content View Switching */}
         {isLoading ? (
@@ -310,6 +337,7 @@ export default function App() {
                 liveTrades={liveTrades}
                 tradeHistory={tradeHistory}
                 onReturnHome={() => setActiveView('GRID')}
+                onOpenResetConfirm={() => setIsResetConfirmOpen(true)}
                 onSelectBot={(botId) => {
                   const found = bots.find(b => b.id === botId);
                   if (found) setSelectedBot(found);
@@ -317,9 +345,16 @@ export default function App() {
               />
             )}
 
-            {/* VIEW 4: LIVE CMC CRYPTO MARKET SCANNER */}
-            {activeView === 'MARKET' && (
-              <LiveMarketScanner coins={coins} bots={bots} />
+            {/* VIEW 4: DEDICATED CMC 500 MARKET SCANNER MATRIX */}
+            {activeView === 'CMC500' && (
+              <Cmc500View 
+                coins={coins} 
+                bots={bots} 
+                liveTrades={liveTrades}
+                onReturnHome={() => setActiveView('GRID')}
+                onViewLiveTrades={() => setActiveView('ALL_TRADES')}
+                onSelectBot={(bot) => setSelectedBot(bot)}
+              />
             )}
           </>
         )}
@@ -360,3 +395,4 @@ export default function App() {
     </div>
   );
 }
+

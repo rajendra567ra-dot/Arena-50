@@ -1,6 +1,6 @@
 import React from 'react';
 import { Trade } from '../types';
-import { Activity, ArrowUpRight, ArrowDownRight, Zap, ArrowLeft, Home } from 'lucide-react';
+import { Activity, ArrowUpRight, ArrowDownRight, Zap, ArrowLeft, Home, RotateCcw } from 'lucide-react';
 import { LiveTradesTicker } from './LiveTradesTicker';
 
 interface AllTradesViewProps {
@@ -8,6 +8,7 @@ interface AllTradesViewProps {
   tradeHistory: Trade[];
   onSelectBot?: (botId: string) => void;
   onReturnHome?: () => void;
+  onOpenResetConfirm?: () => void;
 }
 
 export const AllTradesView: React.FC<AllTradesViewProps> = ({
@@ -15,13 +16,14 @@ export const AllTradesView: React.FC<AllTradesViewProps> = ({
   tradeHistory,
   onSelectBot,
   onReturnHome,
+  onOpenResetConfirm,
 }) => {
   return (
     <div className="space-y-6">
       
-      {/* Quick Breadcrumb / Return to Home Bar */}
-      {onReturnHome && (
-        <div className="flex items-center justify-between">
+      {/* Quick Breadcrumb / Return to Home & Reset Controls */}
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        {onReturnHome && (
           <button
             onClick={onReturnHome}
             className="flex items-center space-x-2 rounded-xl border border-slate-800 bg-slate-900/90 px-3.5 py-2 text-xs font-bold text-cyan-300 hover:border-cyan-500/50 hover:bg-slate-800 hover:text-white transition-all shadow-sm group"
@@ -29,12 +31,26 @@ export const AllTradesView: React.FC<AllTradesViewProps> = ({
             <ArrowLeft className="h-4 w-4 group-hover:-translate-x-0.5 transition-transform" />
             <span>Return to Home Page / Arena</span>
           </button>
+        )}
 
-          <span className="text-xs text-slate-400 font-mono">
-            Active Trades: <strong className="text-emerald-400">{liveTrades.length}</strong> • Completed: <strong className="text-cyan-400">{tradeHistory.length}</strong>
+        <div className="flex items-center space-x-3">
+          <span className="text-xs text-slate-400 font-mono hidden sm:inline">
+            Active: <strong className="text-emerald-400">{liveTrades.length}</strong> • Completed: <strong className="text-cyan-400">{tradeHistory.length}</strong> • Filter: <strong className="text-emerald-400">A+ Only</strong>
           </span>
+
+          {onOpenResetConfirm && (
+            <button
+              id="live-trades-reset-btn"
+              onClick={onOpenResetConfirm}
+              className="flex items-center space-x-1.5 rounded-xl border border-red-500/40 bg-red-950/60 px-3.5 py-2 text-xs font-bold text-red-300 hover:border-red-500 hover:bg-red-900/70 hover:text-white transition-all shadow-sm group"
+              title="Reset all trades and start from clean 0 live trades ($100 per bot)"
+            >
+              <RotateCcw className="h-3.5 w-3.5 text-red-400 group-hover:rotate-180 transition-transform duration-500" />
+              <span>Reset to 0 Live Trades</span>
+            </button>
+          )}
         </div>
-      )}
+      </div>
 
       {/* Active Trades Cards Stream */}
       <LiveTradesTicker
@@ -44,16 +60,32 @@ export const AllTradesView: React.FC<AllTradesViewProps> = ({
 
       {/* Live Active Positions Section */}
       <div className="rounded-2xl border border-slate-800 bg-slate-900/80 p-4 sm:p-5 shadow-xl backdrop-blur-md">
-        <div className="flex items-center justify-between mb-4">
+        <div className="flex flex-wrap items-center justify-between gap-2 mb-4">
           <div className="flex items-center space-x-2">
             <span className="flex h-2.5 w-2.5 rounded-full bg-cyan-400 animate-ping" />
             <h3 className="text-sm font-bold text-white font-['Outfit']">
               Live Open Positions Across All 50 Bots ({liveTrades.length})
             </h3>
+            <span className="rounded bg-emerald-950/90 border border-emerald-500/40 px-2 py-0.5 text-[10px] font-mono font-bold text-emerald-300">
+              Grade A+ Only
+            </span>
           </div>
-          <span className="text-xs text-slate-400 font-mono">
-            Fast Sync • Max 5% Capital / Trade
-          </span>
+
+          <div className="flex items-center space-x-3">
+            <span className="text-xs text-slate-400 font-mono hidden md:inline">
+              Fast Sync • Max 5% Capital / Trade
+            </span>
+
+            {onOpenResetConfirm && (
+              <button
+                onClick={onOpenResetConfirm}
+                className="flex items-center space-x-1 rounded-lg border border-red-900/50 bg-red-950/40 px-2.5 py-1 text-[11px] font-bold text-red-400 hover:bg-red-900/50 hover:text-white transition-colors"
+              >
+                <RotateCcw className="h-3 w-3" />
+                <span>Reset (0 Trades)</span>
+              </button>
+            )}
+          </div>
         </div>
 
         {liveTrades.length === 0 ? (
@@ -67,12 +99,13 @@ export const AllTradesView: React.FC<AllTradesViewProps> = ({
                 <tr>
                   <th className="p-2.5">Bot Name</th>
                   <th className="p-2.5">Asset</th>
+                  <th className="p-2.5">Setup Grade</th>
                   <th className="p-2.5">Direction</th>
+                  <th className="p-2.5">Leverage</th>
                   <th className="p-2.5">Entry Price</th>
                   <th className="p-2.5">Current Price</th>
                   <th className="p-2.5">Allocated (5%)</th>
-                  <th className="p-2.5">Stop Loss (Max 3%)</th>
-                  <th className="p-2.5">Take Profit</th>
+                  <th className="p-2.5">Multi-Stage TP / SL Progress</th>
                   <th className="p-2.5">Live Mark PnL</th>
                 </tr>
               </thead>
@@ -93,6 +126,20 @@ export const AllTradesView: React.FC<AllTradesViewProps> = ({
                       <td className="p-2.5 font-bold text-white">{t.symbol}</td>
                       <td className="p-2.5">
                         <span
+                          title={t.confirmations ? t.confirmations.join(' • ') : 'Strict 10-Rule Confirmed Setup'}
+                          className={`rounded px-2 py-0.5 text-[10px] font-bold border ${
+                            t.setupGrade === 'A+' 
+                              ? 'bg-emerald-950/80 text-emerald-300 border-emerald-500/40'
+                              : t.setupGrade === 'A'
+                              ? 'bg-cyan-950/80 text-cyan-300 border-cyan-500/40'
+                              : 'bg-indigo-950/80 text-indigo-300 border-indigo-500/40'
+                          }`}
+                        >
+                          Grade {t.setupGrade || 'A+'} ({t.confirmedRulesCount || 8}/10 Rules)
+                        </span>
+                      </td>
+                      <td className="p-2.5">
+                        <span
                           className={`rounded px-1.5 py-0.5 text-[10px] font-bold ${
                             isLong ? 'bg-emerald-950 text-emerald-300' : 'bg-rose-950 text-rose-300'
                           }`}
@@ -100,11 +147,34 @@ export const AllTradesView: React.FC<AllTradesViewProps> = ({
                           {t.direction}
                         </span>
                       </td>
+                      <td className="p-2.5">
+                        <span
+                          title={t.leverageReason || `${t.leverage || 5}x Dynamic Leverage`}
+                          className="rounded bg-amber-500/20 text-amber-300 border border-amber-500/30 px-1.5 py-0.5 text-[10px] font-bold"
+                        >
+                          {t.leverage || 5}x
+                        </span>
+                      </td>
                       <td className="p-2.5 text-slate-300">${t.entryPrice}</td>
                       <td className="p-2.5 font-bold text-white">${t.currentPrice}</td>
                       <td className="p-2.5 text-slate-400">${t.capitalAllocated}</td>
-                      <td className="p-2.5 text-rose-400 font-semibold">${t.stopLoss}</td>
-                      <td className="p-2.5 text-emerald-400 font-semibold">${t.takeProfit}</td>
+                      <td className="p-2.5">
+                        <div className="flex flex-col gap-0.5 text-[10px]">
+                          <div className="flex items-center space-x-1.5">
+                            {t.tp1Hit ? (
+                              <span className="text-emerald-400 font-bold">🎯 TP1 Booked (35%)</span>
+                            ) : (
+                              <span className="text-slate-400">TP1: ${t.tp1Price}</span>
+                            )}
+                            {t.tp2Hit && (
+                              <span className="text-cyan-300 font-bold">🚀 TP2 Booked (25%)</span>
+                            )}
+                          </div>
+                          <span className={t.tp1Hit ? "text-emerald-400" : "text-rose-400"}>
+                            SL: ${t.stopLoss} {t.tp1Hit && "(Break-Even Protected)"}
+                          </span>
+                        </div>
+                      </td>
                       <td className="p-2.5">
                         <span className={`font-bold ${isProfit ? 'text-emerald-400' : 'text-rose-400'}`}>
                           {isProfit ? '+' : ''}${t.pnl.toFixed(2)} ({isProfit ? '+' : ''}{t.pnlPercent.toFixed(1)}%)
@@ -142,7 +212,9 @@ export const AllTradesView: React.FC<AllTradesViewProps> = ({
                   <th className="p-2.5">Exit Time</th>
                   <th className="p-2.5">Bot</th>
                   <th className="p-2.5">Asset</th>
+                  <th className="p-2.5">Setup</th>
                   <th className="p-2.5">Side</th>
+                  <th className="p-2.5">Lev</th>
                   <th className="p-2.5">Entry</th>
                   <th className="p-2.5">Exit</th>
                   <th className="p-2.5">PnL (USD)</th>
@@ -168,11 +240,28 @@ export const AllTradesView: React.FC<AllTradesViewProps> = ({
                       <td className="p-2.5 font-bold text-white">{t.symbol}</td>
                       <td className="p-2.5">
                         <span
+                          title={t.confirmations ? t.confirmations.join(' • ') : 'Strict 10-Rule Confirmed Setup'}
+                          className={`rounded px-1.5 py-0.5 text-[10px] font-bold border ${
+                            t.setupGrade === 'A+' 
+                              ? 'bg-emerald-950/70 text-emerald-300 border-emerald-600/40' 
+                              : 'bg-cyan-950/70 text-cyan-300 border-cyan-600/40'
+                          }`}
+                        >
+                          {t.setupGrade || 'A+'} ({t.confirmedRulesCount || 8}/10)
+                        </span>
+                      </td>
+                      <td className="p-2.5">
+                        <span
                           className={`rounded px-1.5 py-0.5 text-[10px] font-bold ${
                             t.direction === 'LONG' ? 'bg-emerald-950 text-emerald-300' : 'bg-rose-950 text-rose-300'
                           }`}
                         >
                           {t.direction}
+                        </span>
+                      </td>
+                      <td className="p-2.5">
+                        <span className="rounded bg-slate-800 px-1.5 py-0.5 text-[10px] text-amber-300 font-bold">
+                          {t.leverage || 5}x
                         </span>
                       </td>
                       <td className="p-2.5 text-slate-300">${t.entryPrice}</td>
@@ -181,8 +270,14 @@ export const AllTradesView: React.FC<AllTradesViewProps> = ({
                         {isWin ? '+' : ''}${t.pnl.toFixed(2)} ({isWin ? '+' : ''}{t.pnlPercent.toFixed(1)}%)
                       </td>
                       <td className="p-2.5 text-slate-400">{t.exitReason}</td>
-                      <td className="p-2.5 font-sans text-slate-300 text-[11px] max-w-sm truncate">
-                        {t.aiReview || 'Processed by self-improving neural brain'}
+                      <td className="p-2.5 font-sans text-slate-300 text-[11px] max-w-sm">
+                        {t.humanAdaptationNote ? (
+                          <div className="rounded bg-purple-950/40 border border-purple-800/40 p-1 text-purple-200">
+                            <span className="font-bold text-purple-300">🧠 Cognitive Auto-Adaptation:</span> {t.humanAdaptationNote}
+                          </div>
+                        ) : (
+                          <span>{t.aiReview || 'Processed by self-improving neural brain'}</span>
+                        )}
                       </td>
                     </tr>
                   );
