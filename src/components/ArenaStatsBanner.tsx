@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   TrendingUp, 
   TrendingDown, 
@@ -8,13 +8,19 @@ import {
   BrainCircuit, 
   DollarSign,
   BarChart3,
-  RotateCcw
+  RotateCcw,
+  Clock,
+  Activity,
+  Cpu,
+  Radio
 } from 'lucide-react';
 import { Bot, Trade } from '../types';
 
 interface ArenaStatsBannerProps {
   bots: Bot[];
   liveTrades: Trade[];
+  uptimeSeconds?: number;
+  cloudStartedAt?: number;
   onViewLiveTrades?: () => void;
   onViewCmc500?: () => void;
   totalCoinsCount?: number;
@@ -24,11 +30,38 @@ interface ArenaStatsBannerProps {
 export const ArenaStatsBanner: React.FC<ArenaStatsBannerProps> = ({ 
   bots, 
   liveTrades, 
+  uptimeSeconds = 0,
+  cloudStartedAt,
   onViewLiveTrades,
   onViewCmc500,
   totalCoinsCount = 60,
   onOpenResetConfirm
 }) => {
+  const [nowTime, setNowTime] = useState(Date.now());
+
+  useEffect(() => {
+    const timer = setInterval(() => setNowTime(Date.now()), 1000);
+    return () => clearInterval(timer);
+  }, []);
+
+  const getUptimeBreakdown = () => {
+    const start = cloudStartedAt || (Date.now() - uptimeSeconds * 1000);
+    const diffSec = Math.max(0, Math.floor((nowTime - start) / 1000));
+    const days = Math.floor(diffSec / 86400);
+    const hours = Math.floor((diffSec % 86400) / 3600);
+    const minutes = Math.floor((diffSec % 3600) / 60);
+    const seconds = diffSec % 60;
+    return {
+      days: days.toString().padStart(2, '0'),
+      hours: hours.toString().padStart(2, '0'),
+      minutes: minutes.toString().padStart(2, '0'),
+      seconds: seconds.toString().padStart(2, '0'),
+      totalSec: diffSec
+    };
+  };
+
+  const uptime = getUptimeBreakdown();
+
   const initialTotal = bots.length * 100; // $5000.00
   const currentTotal = bots.reduce((acc, b) => acc + b.currentBalance, 0);
   const netPnl = currentTotal - initialTotal;
@@ -44,10 +77,66 @@ export const ArenaStatsBanner: React.FC<ArenaStatsBannerProps> = ({
   const totalMistakesAvoided = bots.reduce((acc, b) => acc + b.brain.mistakesAnalyzed, 0);
 
   return (
-    <section className="relative overflow-hidden rounded-2xl border border-slate-800 bg-gradient-to-b from-slate-900/90 to-slate-950/90 p-4 shadow-2xl backdrop-blur-xl sm:p-6">
+    <section className="relative overflow-hidden rounded-2xl border border-slate-800 bg-gradient-to-b from-slate-900/90 to-slate-950/90 p-4 shadow-2xl backdrop-blur-xl sm:p-6 space-y-4">
       {/* Subtle background ambient glow */}
       <div className="pointer-events-none absolute -top-24 -left-24 h-72 w-72 rounded-full bg-cyan-500/10 blur-3xl"></div>
       <div className="pointer-events-none absolute -bottom-24 -right-24 h-72 w-72 rounded-full bg-indigo-500/10 blur-3xl"></div>
+
+      {/* 24x7 Live Cloud Performing Time HUD Banner */}
+      <div className="rounded-xl border border-emerald-500/30 bg-gradient-to-r from-slate-950 via-slate-900 to-emerald-950/40 p-3 sm:p-4 shadow-inner flex flex-wrap items-center justify-between gap-3">
+        <div className="flex items-center space-x-3">
+          <div className="relative flex h-10 w-10 sm:h-11 sm:w-11 items-center justify-center rounded-xl bg-emerald-950/80 border border-emerald-500/40 shadow-lg shadow-emerald-500/10">
+            <Radio className="h-5 w-5 text-emerald-400 animate-pulse" />
+            <span className="absolute -top-1 -right-1 flex h-3 w-3">
+              <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75"></span>
+              <span className="relative inline-flex h-3 w-3 rounded-full bg-emerald-500"></span>
+            </span>
+          </div>
+
+          <div>
+            <div className="flex items-center space-x-2">
+              <span className="text-xs font-bold uppercase tracking-wider text-emerald-400 flex items-center gap-1.5">
+                <span className="h-2 w-2 rounded-full bg-emerald-400 animate-pulse"></span>
+                24 x 7 Live Performing Engine
+              </span>
+              <span className="rounded bg-emerald-500/20 border border-emerald-500/40 px-1.5 py-0.2 text-[10px] font-mono font-bold text-emerald-300">
+                ACTIVE
+              </span>
+            </div>
+            <p className="text-xs text-slate-400">
+              Autonomous cloud runtime • Multi-timeframe algorithmic scanning across crypto markets
+            </p>
+          </div>
+        </div>
+
+        {/* 24x7 Digital Performing Time Clock Counter */}
+        <div className="flex items-center space-x-1.5 sm:space-x-2 bg-slate-950/90 border border-slate-800 rounded-xl px-3 py-2 shadow-sm font-mono">
+          <Clock className="h-4 w-4 text-cyan-400 mr-1 hidden sm:inline" />
+          
+          <div className="flex flex-col items-center">
+            <span className="text-base sm:text-lg font-bold text-white tracking-wider">{uptime.days}</span>
+            <span className="text-[9px] text-slate-400 font-sans uppercase">Days</span>
+          </div>
+          <span className="text-sm font-bold text-cyan-400">:</span>
+
+          <div className="flex flex-col items-center">
+            <span className="text-base sm:text-lg font-bold text-white tracking-wider">{uptime.hours}</span>
+            <span className="text-[9px] text-slate-400 font-sans uppercase">Hours</span>
+          </div>
+          <span className="text-sm font-bold text-cyan-400">:</span>
+
+          <div className="flex flex-col items-center">
+            <span className="text-base sm:text-lg font-bold text-white tracking-wider">{uptime.minutes}</span>
+            <span className="text-[9px] text-slate-400 font-sans uppercase">Mins</span>
+          </div>
+          <span className="text-sm font-bold text-cyan-400">:</span>
+
+          <div className="flex flex-col items-center">
+            <span className="text-base sm:text-lg font-bold text-emerald-400 tracking-wider animate-pulse">{uptime.seconds}</span>
+            <span className="text-[9px] text-emerald-400 font-sans uppercase font-bold">Secs</span>
+          </div>
+        </div>
+      </div>
 
       <div className="grid grid-cols-2 gap-4 lg:grid-cols-5">
         
@@ -119,7 +208,7 @@ export const ArenaStatsBanner: React.FC<ArenaStatsBannerProps> = ({
             <span className="text-xs font-normal text-slate-400">in market</span>
           </div>
           <div className="mt-1 text-xs text-slate-400 flex items-center justify-between">
-            <span>Sync: <strong className="font-mono text-cyan-300 font-normal">2.5s</strong></span>
+            <span>Sync: <strong className="font-mono text-cyan-300 font-normal">2.0s</strong></span>
             {onViewLiveTrades && (
               <span className="text-[10px] text-cyan-400 font-bold group-hover:underline">View &rarr;</span>
             )}
@@ -146,13 +235,18 @@ export const ArenaStatsBanner: React.FC<ArenaStatsBannerProps> = ({
       <div className="mt-4 flex flex-wrap items-center justify-between gap-2 border-t border-slate-800/80 pt-3 text-xs text-slate-400">
         <div className="flex flex-wrap items-center gap-2 sm:gap-4">
           <div className="flex items-center space-x-1.5 text-slate-300">
-            <ShieldCheck className="h-4 w-4 text-emerald-400" />
-            <span>Strict Quality Gate: <strong className="text-emerald-300">10 Strict Rules (&ge;8 Confirmed Required)</strong></span>
+            <span className="flex h-2 w-2 rounded-full bg-emerald-400 animate-pulse"></span>
+            <span>24/7 Engine: <strong className="text-emerald-300 font-mono">{uptime.days}d {uptime.hours}h {uptime.minutes}m {uptime.seconds}s</strong></span>
           </div>
           <span className="hidden text-slate-600 sm:inline">•</span>
           <div className="flex items-center space-x-1.5 text-slate-300">
-            <span className="h-2 w-2 rounded-full bg-cyan-400"></span>
-            <span>Quality Priority: <strong className="text-cyan-300">A+ Setups Only &bull; Zero Compulsory Trades</strong></span>
+            <BrainCircuit className="h-3.5 w-3.5 text-purple-400" />
+            <span>AI Brain: <strong className="text-purple-300">Auto-Adapts on Every SL Hit (0 Delay)</strong></span>
+          </div>
+          <span className="hidden text-slate-600 sm:inline">•</span>
+          <div className="flex items-center space-x-1.5 text-slate-300">
+            <Zap className="h-3.5 w-3.5 text-cyan-400" />
+            <span>Live Trades: <strong className="text-cyan-300">Unrestricted Capacity (All Stored)</strong></span>
           </div>
         </div>
 
@@ -182,3 +276,4 @@ export const ArenaStatsBanner: React.FC<ArenaStatsBannerProps> = ({
     </section>
   );
 };
+

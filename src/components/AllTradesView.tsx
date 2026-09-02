@@ -1,6 +1,6 @@
-import React from 'react';
+import React, { useState, useMemo } from 'react';
 import { Trade } from '../types';
-import { Activity, ArrowUpRight, ArrowDownRight, Zap, ArrowLeft, Home, RotateCcw } from 'lucide-react';
+import { Activity, ArrowUpRight, ArrowDownRight, Zap, ArrowLeft, Home, RotateCcw, Search, Filter, BrainCircuit, CheckCircle2, AlertTriangle } from 'lucide-react';
 import { LiveTradesTicker } from './LiveTradesTicker';
 
 interface AllTradesViewProps {
@@ -18,6 +18,43 @@ export const AllTradesView: React.FC<AllTradesViewProps> = ({
   onReturnHome,
   onOpenResetConfirm,
 }) => {
+  const [liveSearch, setLiveSearch] = useState('');
+  const [liveFilter, setLiveFilter] = useState<'ALL' | 'PROFIT' | 'LOSS'>('ALL');
+  const [historySearch, setHistorySearch] = useState('');
+  const [historyFilter, setHistoryFilter] = useState<'ALL' | 'WINS' | 'LOSSES_SL'>('ALL');
+
+  // Filtered Live Trades
+  const filteredLiveTrades = useMemo(() => {
+    return liveTrades.filter((t) => {
+      const matchSearch =
+        t.symbol.toLowerCase().includes(liveSearch.toLowerCase()) ||
+        t.botName.toLowerCase().includes(liveSearch.toLowerCase()) ||
+        (t.strategyUsed && t.strategyUsed.toLowerCase().includes(liveSearch.toLowerCase()));
+      if (!matchSearch) return false;
+
+      if (liveFilter === 'PROFIT') return t.pnl > 0;
+      if (liveFilter === 'LOSS') return t.pnl < 0;
+      return true;
+    });
+  }, [liveTrades, liveSearch, liveFilter]);
+
+  // Filtered Trade History Ledger
+  const filteredHistory = useMemo(() => {
+    return tradeHistory.filter((t) => {
+      const matchSearch =
+        t.symbol.toLowerCase().includes(historySearch.toLowerCase()) ||
+        t.botName.toLowerCase().includes(historySearch.toLowerCase()) ||
+        (t.exitReason && t.exitReason.toLowerCase().includes(historySearch.toLowerCase())) ||
+        (t.humanAdaptationNote && t.humanAdaptationNote.toLowerCase().includes(historySearch.toLowerCase())) ||
+        (t.aiReview && t.aiReview.toLowerCase().includes(historySearch.toLowerCase()));
+      if (!matchSearch) return false;
+
+      if (historyFilter === 'WINS') return t.pnl >= 0;
+      if (historyFilter === 'LOSSES_SL') return t.pnl < 0 || t.exitReason === 'STOP_LOSS';
+      return true;
+    });
+  }, [tradeHistory, historySearch, historyFilter]);
+
   return (
     <div className="space-y-6">
       
@@ -35,7 +72,7 @@ export const AllTradesView: React.FC<AllTradesViewProps> = ({
 
         <div className="flex items-center space-x-3">
           <span className="text-xs text-slate-400 font-mono hidden sm:inline">
-            Active: <strong className="text-emerald-400">{liveTrades.length}</strong> • Completed: <strong className="text-cyan-400">{tradeHistory.length}</strong> • Filter: <strong className="text-emerald-400">A+ Only</strong>
+            Active: <strong className="text-emerald-400">{liveTrades.length} (Unrestricted)</strong> • Stored History: <strong className="text-cyan-400">{tradeHistory.length}</strong> • Filter: <strong className="text-emerald-400">A+ Only</strong>
           </span>
 
           {onOpenResetConfirm && (
@@ -60,37 +97,65 @@ export const AllTradesView: React.FC<AllTradesViewProps> = ({
 
       {/* Live Active Positions Section */}
       <div className="rounded-2xl border border-slate-800 bg-slate-900/80 p-4 sm:p-5 shadow-xl backdrop-blur-md">
-        <div className="flex flex-wrap items-center justify-between gap-2 mb-4">
+        <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
           <div className="flex items-center space-x-2">
             <span className="flex h-2.5 w-2.5 rounded-full bg-cyan-400 animate-ping" />
             <h3 className="text-sm font-bold text-white font-['Outfit']">
-              Live Open Positions Across All 50 Bots ({liveTrades.length})
+              Live Open Positions Across All Bots ({filteredLiveTrades.length} of {liveTrades.length})
             </h3>
             <span className="rounded bg-emerald-950/90 border border-emerald-500/40 px-2 py-0.5 text-[10px] font-mono font-bold text-emerald-300">
               Grade A+ Only
             </span>
           </div>
 
-          <div className="flex items-center space-x-3">
-            <span className="text-xs text-slate-400 font-mono hidden md:inline">
-              Fast Sync • Max 5% Capital / Trade
-            </span>
+          <div className="flex flex-wrap items-center gap-2">
+            {/* Live Search Input */}
+            <div className="relative">
+              <Search className="absolute left-2.5 top-2.5 h-3.5 w-3.5 text-slate-500" />
+              <input
+                type="text"
+                placeholder="Search symbol or bot..."
+                value={liveSearch}
+                onChange={(e) => setLiveSearch(e.target.value)}
+                className="rounded-lg border border-slate-800 bg-slate-950/80 pl-8 pr-3 py-1.5 text-xs text-slate-200 placeholder-slate-500 focus:border-cyan-500 focus:outline-none w-44"
+              />
+            </div>
 
-            {onOpenResetConfirm && (
+            {/* Filter Buttons */}
+            <div className="flex items-center rounded-lg border border-slate-800 bg-slate-950/80 p-0.5 text-[11px]">
               <button
-                onClick={onOpenResetConfirm}
-                className="flex items-center space-x-1 rounded-lg border border-red-900/50 bg-red-950/40 px-2.5 py-1 text-[11px] font-bold text-red-400 hover:bg-red-900/50 hover:text-white transition-colors"
+                onClick={() => setLiveFilter('ALL')}
+                className={`px-2.5 py-1 rounded-md font-bold transition-colors ${
+                  liveFilter === 'ALL' ? 'bg-cyan-500 text-slate-950' : 'text-slate-400 hover:text-white'
+                }`}
               >
-                <RotateCcw className="h-3 w-3" />
-                <span>Reset (0 Trades)</span>
+                All ({liveTrades.length})
               </button>
-            )}
+              <button
+                onClick={() => setLiveFilter('PROFIT')}
+                className={`px-2.5 py-1 rounded-md font-bold transition-colors ${
+                  liveFilter === 'PROFIT' ? 'bg-emerald-500 text-slate-950' : 'text-emerald-400 hover:text-emerald-300'
+                }`}
+              >
+                In Profit
+              </button>
+              <button
+                onClick={() => setLiveFilter('LOSS')}
+                className={`px-2.5 py-1 rounded-md font-bold transition-colors ${
+                  liveFilter === 'LOSS' ? 'bg-rose-500 text-slate-950' : 'text-rose-400 hover:text-rose-300'
+                }`}
+              >
+                Drawdown
+              </button>
+            </div>
           </div>
         </div>
 
-        {liveTrades.length === 0 ? (
+        {filteredLiveTrades.length === 0 ? (
           <div className="py-8 text-center text-xs text-slate-500">
-            No live trades open right now. Bots are actively scanning for confluence setups.
+            {liveTrades.length === 0
+              ? 'No live trades open right now. Bots are actively scanning for confluence setups.'
+              : 'No live trades match the active filter/search criteria.'}
           </div>
         ) : (
           <div className="overflow-x-auto">
@@ -110,7 +175,7 @@ export const AllTradesView: React.FC<AllTradesViewProps> = ({
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-800/60 font-mono">
-                {liveTrades.map((t) => {
+                {filteredLiveTrades.map((t) => {
                   const isLong = t.direction === 'LONG';
                   const isProfit = t.pnl >= 0;
 
@@ -191,18 +256,62 @@ export const AllTradesView: React.FC<AllTradesViewProps> = ({
 
       {/* Global Trade History Ledger */}
       <div className="rounded-2xl border border-slate-800 bg-slate-900/80 p-4 sm:p-5 shadow-xl backdrop-blur-md">
-        <div className="flex items-center justify-between mb-4">
+        <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
           <div className="flex items-center space-x-2">
             <Activity className="h-4 w-4 text-indigo-400" />
             <h3 className="text-sm font-bold text-white font-['Outfit']">
-              Completed Trades Ledger &amp; AI Post-Trade Reviews ({tradeHistory.length})
+              Completed Trades Ledger &amp; AI Post-Trade Reviews ({filteredHistory.length} of {tradeHistory.length})
             </h3>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2">
+            {/* History Search Input */}
+            <div className="relative">
+              <Search className="absolute left-2.5 top-2.5 h-3.5 w-3.5 text-slate-500" />
+              <input
+                type="text"
+                placeholder="Search history or AI notes..."
+                value={historySearch}
+                onChange={(e) => setHistorySearch(e.target.value)}
+                className="rounded-lg border border-slate-800 bg-slate-950/80 pl-8 pr-3 py-1.5 text-xs text-slate-200 placeholder-slate-500 focus:border-indigo-500 focus:outline-none w-52"
+              />
+            </div>
+
+            {/* Filter History Buttons */}
+            <div className="flex items-center rounded-lg border border-slate-800 bg-slate-950/80 p-0.5 text-[11px]">
+              <button
+                onClick={() => setHistoryFilter('ALL')}
+                className={`px-2.5 py-1 rounded-md font-bold transition-colors ${
+                  historyFilter === 'ALL' ? 'bg-indigo-600 text-white' : 'text-slate-400 hover:text-white'
+                }`}
+              >
+                All ({tradeHistory.length})
+              </button>
+              <button
+                onClick={() => setHistoryFilter('WINS')}
+                className={`px-2.5 py-1 rounded-md font-bold transition-colors ${
+                  historyFilter === 'WINS' ? 'bg-emerald-600 text-white' : 'text-emerald-400 hover:text-emerald-300'
+                }`}
+              >
+                Wins Only
+              </button>
+              <button
+                onClick={() => setHistoryFilter('LOSSES_SL')}
+                className={`px-2.5 py-1 rounded-md font-bold transition-colors ${
+                  historyFilter === 'LOSSES_SL' ? 'bg-purple-600 text-white' : 'text-purple-400 hover:text-purple-300'
+                }`}
+              >
+                🧠 SL Hit &amp; Auto-Adapted
+              </button>
+            </div>
           </div>
         </div>
 
-        {tradeHistory.length === 0 ? (
+        {filteredHistory.length === 0 ? (
           <div className="py-8 text-center text-xs text-slate-500">
-            No completed trades logged yet.
+            {tradeHistory.length === 0
+              ? 'No completed trades logged yet.'
+              : 'No completed trades match your filter criteria.'}
           </div>
         ) : (
           <div className="overflow-x-auto">
@@ -219,11 +328,11 @@ export const AllTradesView: React.FC<AllTradesViewProps> = ({
                   <th className="p-2.5">Exit</th>
                   <th className="p-2.5">PnL (USD)</th>
                   <th className="p-2.5">Exit Reason</th>
-                  <th className="p-2.5">Neural AI Post-Trade Insight</th>
+                  <th className="p-2.5">Neural AI Post-Trade Insight &amp; Auto-Adaptation</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-800/60 font-mono">
-                {tradeHistory.map((t) => {
+                {filteredHistory.map((t) => {
                   const isWin = t.pnl >= 0;
                   return (
                     <tr
@@ -272,8 +381,12 @@ export const AllTradesView: React.FC<AllTradesViewProps> = ({
                       <td className="p-2.5 text-slate-400">{t.exitReason}</td>
                       <td className="p-2.5 font-sans text-slate-300 text-[11px] max-w-sm">
                         {t.humanAdaptationNote ? (
-                          <div className="rounded bg-purple-950/40 border border-purple-800/40 p-1 text-purple-200">
-                            <span className="font-bold text-purple-300">🧠 Cognitive Auto-Adaptation:</span> {t.humanAdaptationNote}
+                          <div className="rounded bg-purple-950/50 border border-purple-800/50 p-1.5 text-purple-200">
+                            <span className="font-bold text-purple-300 flex items-center gap-1 mb-0.5">
+                              <BrainCircuit className="h-3 w-3 text-purple-400 inline" />
+                              Auto-Adapted on SL Hit:
+                            </span> 
+                            {t.humanAdaptationNote}
                           </div>
                         ) : (
                           <span>{t.aiReview || 'Processed by self-improving neural brain'}</span>

@@ -256,6 +256,8 @@ export default function App() {
           <ArenaStatsBanner 
             bots={bots} 
             liveTrades={liveTrades} 
+            uptimeSeconds={uptimeSeconds}
+            cloudStartedAt={cloudStartedAt}
             onViewLiveTrades={() => setActiveView('ALL_TRADES')}
             onViewCmc500={() => setActiveView('CMC500')}
             totalCoinsCount={coins.length}

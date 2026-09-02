@@ -1,6 +1,11 @@
 import { GoogleGenAI } from '@google/genai';
 import { Bot, LearnedLesson, Trade } from '../src/types';
 
+// In-memory rate limiting and cooldown state for Gemini API free-tier protection
+let lastGeminiCallTime = 0;
+let geminiCooldownUntil = 0;
+const MIN_INTERVAL_BETWEEN_CALLS_MS = 15000; // Keep calls safely spaced (max 4 req/min to respect 5 req/min free limit)
+
 // Initialize server-side Gemini client with recommended telemetry header
 function getGeminiClient(): GoogleGenAI | null {
   const apiKey = process.env.GEMINI_API_KEY;
@@ -30,13 +35,20 @@ export async function performAiBrainReflection(
   newEvolutionSummary: string;
   notes: string[];
 }> {
-  const ai = getGeminiClient();
-  const timestamp = Date.now();
+  const now = Date.now();
   const tradeToAnalyze = recentTrade || bot.tradeHistory[bot.tradeHistory.length - 1];
 
-  if (ai && tradeToAnalyze) {
-    try {
-      const prompt = `You are the neural cognitive core for an advanced quantitative algorithmic trading bot named "${bot.name}" (Serial: ${bot.serialNumber}).
+  // If in rate-limit cooldown or called too quickly, seamlessly use algorithmic learning engine
+  const isCooldownActive = now < geminiCooldownUntil;
+  const isTooSoon = now - lastGeminiCallTime < MIN_INTERVAL_BETWEEN_CALLS_MS;
+
+  if (!isCooldownActive && !isTooSoon && tradeToAnalyze) {
+    const ai = getGeminiClient();
+    if (ai) {
+      try {
+        lastGeminiCallTime = Date.now();
+
+        const prompt = `You are the neural cognitive core for an advanced quantitative algorithmic trading bot named "${bot.name}" (Serial: ${bot.serialNumber}).
 The bot executes automated multi-timeframe trades with strict risk management (max 5% dynamic capital per trade, max 3% stop loss).
 
 Current Strategy: ${bot.strategy.name} (${bot.strategy.coreArchetype})
@@ -63,47 +75,54 @@ Provide your response strictly in JSON format matching this schema:
   "learningNote": "A technical learning observation for the bot's memory log"
 }`;
 
-      const response = await ai.models.generateContent({
-        model: 'gemini-2.5-flash',
-        contents: prompt,
-        config: {
-          responseMimeType: 'application/json',
-          temperature: 0.7,
-        },
-      });
+        const response = await ai.models.generateContent({
+          model: 'gemini-2.5-flash',
+          contents: prompt,
+          config: {
+            responseMimeType: 'application/json',
+            temperature: 0.7,
+          },
+        });
 
-      const text = response.text;
-      if (text) {
-        const parsed = JSON.parse(text.trim());
-        const lesson: LearnedLesson = {
-          id: `lesson-${bot.id}-${timestamp}`,
-          timestamp,
-          tradeId: tradeToAnalyze.id,
-          symbol: tradeToAnalyze.symbol,
-          mistakeIdentified: parsed.mistakeIdentified || 'Over-reliance on single timeframe momentum during volatility shift',
-          adaptationMade: parsed.adaptationMade || 'Heightened required 15m and 1h directional confluence before position entry',
-          parameterAdjusted: parsed.parameterAdjusted || 'MTF Alignment Strictness +0.15',
-          improvementCategory: parsed.improvementCategory || 'TIMEFRAME_ALIGNMENT',
-          confidenceImpact: typeof parsed.confidenceImpact === 'number' ? parsed.confidenceImpact : 1,
-        };
+        const text = response.text;
+        if (text) {
+          const parsed = JSON.parse(text.trim());
+          const lesson: LearnedLesson = {
+            id: `lesson-${bot.id}-${Date.now()}`,
+            timestamp: Date.now(),
+            tradeId: tradeToAnalyze.id,
+            symbol: tradeToAnalyze.symbol,
+            mistakeIdentified: parsed.mistakeIdentified || 'Over-reliance on single timeframe momentum during volatility shift',
+            adaptationMade: parsed.adaptationMade || 'Heightened required 15m and 1h directional confluence before position entry',
+            parameterAdjusted: parsed.parameterAdjusted || 'MTF Alignment Strictness +0.15',
+            improvementCategory: parsed.improvementCategory || 'TIMEFRAME_ALIGNMENT',
+            confidenceImpact: typeof parsed.confidenceImpact === 'number' ? parsed.confidenceImpact : 1,
+          };
 
-        const notes = [
-          ...bot.brain.learningNotes,
-          `[AI Reflection ${new Date().toLocaleTimeString()}]: ${parsed.learningNote || parsed.adaptationMade}`,
-        ].slice(-15);
+          const notes = [
+            ...bot.brain.learningNotes,
+            `[AI Reflection ${new Date().toLocaleTimeString()}]: ${parsed.learningNote || parsed.adaptationMade}`,
+          ].slice(-15);
 
-        return {
-          lesson,
-          newEvolutionSummary: parsed.evolutionSummary || `Neural brain reinforced. Parameter weights calibrated for higher selectivity.`,
-          notes,
-        };
+          return {
+            lesson,
+            newEvolutionSummary: parsed.evolutionSummary || `Neural brain reinforced. Parameter weights calibrated for higher selectivity.`,
+            notes,
+          };
+        }
+      } catch (error: any) {
+        // If 429 quota is hit, gracefully set a 60-second cooldown so we do not spam Gemini
+        if (error?.status === 429 || error?.message?.includes('429') || error?.message?.includes('RESOURCE_EXHAUSTED')) {
+          geminiCooldownUntil = Date.now() + 60000;
+          console.log('[Gemini Neural Brain] Free-tier rate limit active. Automatically routed to local quant learning engine for 60s.');
+        } else {
+          console.warn('[Gemini Neural Brain] Fallback to local quant engine:', error?.message || error);
+        }
       }
-    } catch (error) {
-      console.warn('Gemini reflection fallback triggered:', error);
     }
   }
 
-  // High-fidelity algorithmic neural learning synthesis (Fallback & offline-proof)
+  // High-fidelity algorithmic neural learning synthesis (Instant fallback & offline-proof)
   return generateAlgorithmicReflection(bot, tradeToAnalyze);
 }
 

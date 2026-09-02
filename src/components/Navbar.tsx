@@ -167,11 +167,11 @@ export const Navbar: React.FC<NavbarProps> = ({
           
           {/* Continuous 24x7 Cloud Uptime Clock */}
           <div 
-            className="hidden lg:flex items-center space-x-2 rounded-lg border border-cyan-900/40 bg-cyan-950/40 px-2.5 py-1.5 text-xs text-cyan-300 shadow-sm"
-            title="Cloud Continuous 24x7 Active Run Time"
+            className="hidden md:flex items-center space-x-2 rounded-lg border border-cyan-900/40 bg-cyan-950/40 px-2.5 py-1.5 text-xs text-cyan-300 shadow-sm"
+            title="App Performing Time: Continuous 24/7 Cloud Running Time"
           >
             <Cloud className="h-3.5 w-3.5 text-cyan-400 animate-pulse" />
-            <span className="text-slate-400 font-medium">24x7 Cloud:</span>
+            <span className="text-slate-400 font-medium">24x7 Run Time:</span>
             <span className="font-mono font-bold text-cyan-200 tracking-tight">{format24x7Uptime()}</span>
           </div>
 

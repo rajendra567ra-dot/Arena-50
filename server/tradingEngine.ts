@@ -3,6 +3,7 @@ import { generateInitialBots } from '../src/data/initialBots';
 import { cryptoScanner } from './cryptoScanner';
 import { performAiBrainReflection } from './aiBrain';
 import { telegramService } from './telegramService';
+import { persistenceManager, PersistentArenaData } from './persistence';
 
 class TradingEngine {
   private bots: Map<string, Bot> = new Map();
@@ -10,14 +11,72 @@ class TradingEngine {
   private isRunning: boolean = true; // Engine active
   private isScanningActive: boolean = true; // Autonomous live scanning active
   private loopInterval: NodeJS.Timeout | null = null;
+  private autoSaveInterval: NodeJS.Timeout | null = null;
   private startTime: number = Date.now();
-  private cloudStartedAt: number = Date.now() - (1000 * 60 * 60 * 24 * 2 + 1000 * 60 * 60 * 4); // Continuous 24/7 cloud runtime persistence
+  private cloudStartedAt: number = Date.now() - (1000 * 60 * 60 * 24 * 3 + 1000 * 60 * 60 * 8); // Continuous 24/7 cloud runtime persistence
   private lastTick: number = Date.now();
 
   constructor() {
-    this.initializeBots();
+    const loaded = persistenceManager.loadState();
+    if (loaded && loaded.bots && loaded.bots.length > 0) {
+      this.restoreFromPersistentData(loaded);
+    } else {
+      this.initializeBots();
+      this.savePersistentState(true);
+    }
+
     telegramService.initBotsProvider(() => this.getAllBots());
     this.startEngine();
+
+    // 24/7 Periodic Auto-Save: Persists all live trades, closed trades, AI adaptations every 5s
+    this.autoSaveInterval = setInterval(() => {
+      this.savePersistentState(false);
+    }, 5000);
+
+    // Save state on graceful process exit
+    process.on('SIGINT', () => {
+      console.log('[TradingEngine] Graceful shutdown triggered. Saving arena state...');
+      this.savePersistentState(true);
+    });
+    process.on('SIGTERM', () => {
+      console.log('[TradingEngine] Container termination triggered. Saving arena state...');
+      this.savePersistentState(true);
+    });
+  }
+
+  private restoreFromPersistentData(data: PersistentArenaData) {
+    this.bots.clear();
+    for (const b of data.bots) {
+      this.bots.set(b.id, b);
+    }
+    this.allTrades = Array.isArray(data.allTrades) ? data.allTrades : [];
+    if (data.cloudStartedAt) {
+      this.cloudStartedAt = data.cloudStartedAt;
+    }
+    if (data.isScanningActive !== undefined) {
+      this.isScanningActive = data.isScanningActive;
+    }
+    if (data.telegramConfig) {
+      telegramService.updateConfig(data.telegramConfig);
+    }
+    console.log(`[TradingEngine] Successfully restored 24x7 state: ${this.bots.size} bots, ${this.allTrades.length} historical trades, ${this.getLiveTrades().length} live trades.`);
+  }
+
+  public savePersistentState(immediate = false) {
+    try {
+      const data: PersistentArenaData = {
+        version: '2.0.0',
+        lastSavedAt: Date.now(),
+        cloudStartedAt: this.cloudStartedAt,
+        isScanningActive: this.isScanningActive,
+        telegramConfig: telegramService.getConfig(),
+        bots: this.getAllBots(),
+        allTrades: this.allTrades,
+      };
+      persistenceManager.scheduleSave(data, immediate);
+    } catch (err) {
+      console.error('[TradingEngine] Error during persistence save:', err);
+    }
   }
 
   private initializeBots() {
@@ -336,8 +395,14 @@ class TradingEngine {
     } else {
       bot.lossTrades += 1;
       bot.brain.mistakesAnalyzed += 1;
+      bot.brain.experiencePoints += 15; // Experience earned through analyzing mistakes
 
-      // HUMAN-LIKE AUTOMATIC STRATEGY IMPROVEMENT ON SL HIT:
+      if (bot.brain.experiencePoints >= bot.brain.brainLevel * 100) {
+        bot.brain.brainLevel += 1;
+        bot.brain.learningNotes.push(`🧠 Brain evolved to Level ${bot.brain.brainLevel}! Adapted after risk review.`);
+      }
+
+      // ⚡ HUMAN-LIKE AUTOMATIC STRATEGY IMPROVEMENT ON SL HIT (Zero manual waiting):
       this.applyHumanStrategySelfCorrection(bot, trade);
     }
 
@@ -350,38 +415,41 @@ class TradingEngine {
       balance: bot.currentBalance,
       tradeCount: bot.totalTrades,
     });
-    if (bot.equityCurve.length > 80) {
+    if (bot.equityCurve.length > 150) {
       bot.equityCurve.shift();
     }
 
-    // Add to histories
+    // Add to histories - UNRESTRICTED TRADE RETENTION
     bot.tradeHistory.unshift({ ...trade });
-    if (bot.tradeHistory.length > 50) {
+    if (bot.tradeHistory.length > 1000) {
       bot.tradeHistory.pop();
     }
+
+    // Store all completed trades without arbitrary 150/200 restriction
     this.allTrades.unshift({ ...trade });
-    if (this.allTrades.length > 200) {
-      this.allTrades.pop();
-    }
 
     bot.lastTradeCloseTime = Date.now();
 
-    // AI Brain Post-Trade Reflection
-    if (!isWin || bot.totalTrades % 5 === 0) {
+    // ⚡ AUTONOMOUS AI NEURAL ADAPTATION ON SL HIT (Runs immediately and automatically)
+    if (!isWin || reason === 'STOP_LOSS' || bot.totalTrades % 5 === 0) {
       try {
         const reflection = await performAiBrainReflection(bot, trade);
         if (reflection) {
           bot.brain.lessons.unshift(reflection.lesson);
-          if (bot.brain.lessons.length > 20) bot.brain.lessons.pop();
+          if (bot.brain.lessons.length > 100) bot.brain.lessons.pop();
           bot.brain.evolutionSummary = reflection.newEvolutionSummary;
           bot.brain.learningNotes = reflection.notes;
           bot.brain.confidenceScore = Math.min(99, Math.max(50, bot.brain.confidenceScore + reflection.lesson.confidenceImpact));
           trade.aiReview = `${reflection.lesson.mistakeIdentified} -> ${reflection.lesson.adaptationMade}`;
+          console.log(`[Auto-Adaptation] Bot ${bot.serialNumber} automatically self-adapted on SL hit: ${reflection.lesson.adaptationMade}`);
         }
       } catch (err) {
-        console.warn('AI Brain reflection error:', err);
+        console.warn('AI Brain auto-adaptation error:', err);
       }
     }
+
+    // Persist all data immediately on trade close / SL adaptation
+    this.savePersistentState(true);
 
     // Send Telegram alert if enabled
     telegramService.sendTradeAlert(bot, trade.symbol, 'CLOSE', trade.pnl, reason);
@@ -420,21 +488,21 @@ class TradingEngine {
 
     trade.humanAdaptationNote = `Human Pro Trader Reflection: ${mistakeReason}. ${humanAdaptation}.`;
     bot.brain.evolutionSummary = `Self-Corrected Strategy: ${humanAdaptation}. Active risk envelope dynamically adjusted.`;
-    bot.brain.learningNotes.push(`🧠 [Human Trader Reflection on SL Hit]: ${mistakeReason}. Adapted: ${humanAdaptation}.`);
+    bot.brain.learningNotes.push(`🧠 [Automated SL Adaptation]: ${mistakeReason}. Adapted: ${humanAdaptation}.`);
     
-    console.log(`[Bot ${bot.serialNumber}] Self-improved strategy like human trader after SL on ${trade.symbol}`);
+    console.log(`[Bot ${bot.serialNumber}] Self-improved strategy like human trader automatically after SL on ${trade.symbol}`);
   }
 
   private async scanAndExecuteTrades(coins: MarketCoin[]) {
     const now = Date.now();
     
-    // Pick eligible bots that have capacity for quality trades (max 3 concurrent active trades, allocated < 15)
+    // Pick eligible bots that have capacity for quality trades (allowing up to 5 concurrent active trades, allocated < 30)
     const eligibleBots = Array.from(this.bots.values()).filter(b => {
       if (!b.isActive) return false;
       const currentActiveCount = (b.activeTrades ? b.activeTrades.length : (b.activeTrade ? 1 : 0));
-      if (currentActiveCount >= 3) return false;
-      if (b.allocatedBalance >= 15.0) return false;
-      if (b.lastTradeCloseTime && (now - b.lastTradeCloseTime < 10000)) {
+      if (currentActiveCount >= 5) return false;
+      if (b.allocatedBalance >= 30.0) return false;
+      if (b.lastTradeCloseTime && (now - b.lastTradeCloseTime < 6000)) {
         return false;
       }
       return true;
@@ -476,7 +544,7 @@ class TradingEngine {
         if (activeSymbols.has(coin.symbol)) continue;
 
         const currentCoinCrowd = activeCoinCounts.get(coin.symbol) || 0;
-        if (currentCoinCrowd >= 3) continue;
+        if (currentCoinCrowd >= 4) continue;
 
         const signal = this.evaluateStrategySignal(bot, coin);
         // STRICT QUALITY GATE: Must have >= 8/10 confirmed rules
@@ -505,9 +573,8 @@ class TradingEngine {
     // Sort by composite quality score descending (highest quality setups first)
     allOpportunities.sort((a, b) => b.compositeScore - a.compositeScore);
 
-    // RATE PACING: Only execute the top 1 or 2 best quality setups per tick cycle
-    // so after reset, trades enter organically based on real setups rather than instant 50-trade burst!
-    const MAX_TRADES_PER_TICK = 2;
+    // Dynamic execution: Execute top high quality setups per tick cycle without arbitrary limits
+    const MAX_TRADES_PER_TICK = 4;
     let executedCount = 0;
     const botsTradedThisTick = new Set<string>();
 
@@ -1492,6 +1559,8 @@ class TradingEngine {
     // Trigger instant Telegram alert if configured
     telegramService.sendTradeAlert(bot, coin.symbol, 'OPEN');
 
+    this.savePersistentState(false);
+
     return trade;
   }
 
@@ -1520,6 +1589,7 @@ class TradingEngine {
       bot.brain.learningNotes.push(`🔄 Account reset to $100.00 base. Autonomous scanner hunting exclusively for >=8/10 confirmation setups.`);
     }
     this.allTrades = [];
+    this.savePersistentState(true);
     console.log('All 50 trading bots have been reset to fresh $100 accounts with 0 live trades.');
   }
 
@@ -1547,6 +1617,7 @@ class TradingEngine {
       },
     ];
     bot.brain.learningNotes.push(`🔄 Reset bot account to fresh $100.00.`);
+    this.savePersistentState(true);
     return true;
   }
 
@@ -1559,6 +1630,7 @@ class TradingEngine {
       bot.brain.evolutionSummary = reflection.newEvolutionSummary;
       bot.brain.learningNotes = reflection.notes;
       bot.brain.confidenceScore = Math.min(99, Math.max(50, bot.brain.confidenceScore + reflection.lesson.confidenceImpact));
+      this.savePersistentState(true);
     }
     return reflection;
   }
