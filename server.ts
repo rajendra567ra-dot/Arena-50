@@ -1,4 +1,6 @@
 import express from 'express';
+import http from 'http';
+import { execSync } from 'child_process';
 import path from 'path';
 import dotenv from 'dotenv';
 import { createServer as createViteServer } from 'vite';
@@ -192,9 +194,73 @@ async function startServer() {
     });
   }
 
-  app.listen(PORT, '0.0.0.0', () => {
-    console.log(`AI Trading Arena Server running at http://0.0.0.0:${PORT}`);
+  const server = http.createServer(app);
+
+  let listenAttempts = 0;
+  const maxListenAttempts = 15;
+  const retryDelayMs = 1500;
+
+  function bindServer() {
+    listenAttempts++;
+    server.listen(PORT, '0.0.0.0', () => {
+      console.log(`[Server] AI Trading Arena Server running successfully at http://0.0.0.0:${PORT} (PID: ${process.pid})`);
+    });
+  }
+
+  server.on('error', (err: any) => {
+    if (err.code === 'EADDRINUSE') {
+      console.warn(`[Server] Port ${PORT} is currently in use (attempt ${listenAttempts}/${maxListenAttempts}). Waiting for previous container process to release socket...`);
+      
+      // Attempt to free port from stale previous instances in container environments
+      try {
+        execSync(`fuser -k ${PORT}/tcp 2>/dev/null || true`);
+      } catch {
+        // Ignored if command is unavailable or restricted
+      }
+
+      if (listenAttempts < maxListenAttempts) {
+        setTimeout(() => {
+          try {
+            server.close();
+          } catch {
+            // ignore if not yet open
+          }
+          bindServer();
+        }, retryDelayMs);
+      } else {
+        console.error(`[Server] FATAL: Port ${PORT} remained busy after ${maxListenAttempts} attempts (${(maxListenAttempts * retryDelayMs) / 1000}s).`);
+        process.exit(1);
+      }
+    } else {
+      console.error('[Server] Fatal server error:', err);
+      process.exit(1);
+    }
   });
+
+  // Graceful shutdown handling for cloud orchestrators (SIGTERM, SIGINT)
+  const shutdown = (signal: string) => {
+    console.log(`[Server] Received ${signal}. Gracefully stopping and releasing port ${PORT}...`);
+    try {
+      tradingEngine.savePersistentState(true);
+    } catch (e) {
+      console.error('[Server] Error saving state during shutdown:', e);
+    }
+
+    server.close(() => {
+      console.log(`[Server] Port ${PORT} closed cleanly.`);
+      process.exit(0);
+    });
+
+    // Safety timeout to avoid hanging shutdown
+    setTimeout(() => {
+      process.exit(0);
+    }, 3000).unref();
+  };
+
+  process.on('SIGTERM', () => shutdown('SIGTERM'));
+  process.on('SIGINT', () => shutdown('SIGINT'));
+
+  bindServer();
 }
 
 startServer();
