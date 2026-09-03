@@ -246,7 +246,7 @@ export const ArenaStatsBanner: React.FC<ArenaStatsBannerProps> = ({
           <span className="hidden text-slate-600 sm:inline">•</span>
           <div className="flex items-center space-x-1.5 text-slate-300">
             <Zap className="h-3.5 w-3.5 text-cyan-400" />
-            <span>Live Trades: <strong className="text-cyan-300">Unrestricted Capacity (All Stored)</strong></span>
+            <span>Risk Model: <strong className="text-cyan-300">3% Dynamic Capital &bull; Max 1.5% SL &bull; TP1 &lt; SL</strong></span>
           </div>
         </div>
 

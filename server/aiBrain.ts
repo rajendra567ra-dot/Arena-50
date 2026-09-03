@@ -49,7 +49,7 @@ export async function performAiBrainReflection(
         lastGeminiCallTime = Date.now();
 
         const prompt = `You are the neural cognitive core for an advanced quantitative algorithmic trading bot named "${bot.name}" (Serial: ${bot.serialNumber}).
-The bot executes automated multi-timeframe trades with strict risk management (max 5% dynamic capital per trade, max 3% stop loss).
+The bot executes automated multi-timeframe trades with strict risk management (3% dynamic capital per trade, max 1.5% stop loss of dynamic capital with dynamic leverage, and TP1 strictly closer to entry than SL).
 
 Current Strategy: ${bot.strategy.name} (${bot.strategy.coreArchetype})
 Required Indicators: ${bot.strategy.requiredIndicators.join(', ')}
@@ -75,14 +75,34 @@ Provide your response strictly in JSON format matching this schema:
   "learningNote": "A technical learning observation for the bot's memory log"
 }`;
 
-        const response = await ai.models.generateContent({
-          model: 'gemini-2.5-flash',
-          contents: prompt,
-          config: {
-            responseMimeType: 'application/json',
-            temperature: 0.7,
-          },
-        });
+        let response;
+        try {
+          response = await ai.models.generateContent({
+            model: 'gemini-3.8-flash',
+            contents: prompt,
+            config: {
+              responseMimeType: 'application/json',
+              temperature: 0.7,
+            },
+          });
+        } catch (modelErr: any) {
+          if (
+            modelErr?.status === 404 ||
+            modelErr?.message?.includes('NOT_FOUND') ||
+            modelErr?.message?.includes('gemini-3.8-flash')
+          ) {
+            response = await ai.models.generateContent({
+              model: 'gemini-3.6-flash',
+              contents: prompt,
+              config: {
+                responseMimeType: 'application/json',
+                temperature: 0.7,
+              },
+            });
+          } else {
+            throw modelErr;
+          }
+        }
 
         const text = response.text;
         if (text) {

@@ -78,15 +78,15 @@ export interface Trade {
   currentPrice: number;
   exitPrice?: number;
   amount: number; // Coin amount
-  capitalAllocated: number; // Initial capital margin (max 5% of bot balance)
+  capitalAllocated: number; // Dynamic capital margin (3% of dynamic bot balance)
   remainingCapital?: number; // Remaining capital after TP1/TP2 partial bookings
   leverage: number; // Dynamic leverage per trade (e.g., 2x, 3x, 5x, 8x, 10x, 15x, 20x, 25x)
   leverageReason?: string; // Reason for chosen leverage (e.g., "20x High Confluence Tier-1 Trend")
-  stopLoss: number; // Dynamic SL (starts at initial SL -> moves to BE on TP1 -> moves to TP1 on TP2)
+  stopLoss: number; // Dynamic SL (max 1.5% loss of dynamic capital with dynamic leverage)
   initialStopLoss?: number;
   takeProfit: number;
-  tp1Price: number; // Stage 1 TP (+1.8% to +2.5%) -> Books 35% profit & moves SL to Entry
-  tp2Price: number; // Stage 2 TP (+3.5% to +5.0%) -> Books 25% margin & moves SL to TP1
+  tp1Price: number; // Stage 1 TP (strictly closer to entry than SL) -> Books 35% profit & moves SL to Entry
+  tp2Price: number; // Stage 2 TP -> Books 25% margin & moves SL to TP1
   tp1Hit?: boolean;
   tp2Hit?: boolean;
   tp1RealizedPnl?: number;

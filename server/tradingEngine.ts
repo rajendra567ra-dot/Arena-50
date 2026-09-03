@@ -47,6 +47,32 @@ class TradingEngine {
   private restoreFromPersistentData(data: PersistentArenaData) {
     this.bots.clear();
     for (const b of data.bots) {
+      // Migrate active trades to new parameters (3% dynamic capital, max 1.5% SL, TP1 closer than SL)
+      if (b.activeTrades && b.activeTrades.length > 0) {
+        b.activeTrades = b.activeTrades.map(trade => {
+          if (trade.status === 'OPEN') {
+            const lev = trade.leverage || 10;
+            const newCap = Math.max(0.50, Number((b.currentBalance * 0.03).toFixed(2)));
+            const slPct = Number((0.50 / lev).toFixed(4));
+            const tp1Pct = Number((slPct * 0.60).toFixed(4));
+            const isLong = trade.direction === 'LONG';
+
+            trade.capitalAllocated = newCap;
+            trade.remainingCapital = newCap;
+            if (!trade.tp1Hit) {
+              trade.stopLoss = isLong
+                ? Number((trade.entryPrice * (1 - slPct)).toFixed(4))
+                : Number((trade.entryPrice * (1 + slPct)).toFixed(4));
+              trade.tp1Price = isLong
+                ? Number((trade.entryPrice * (1 + tp1Pct)).toFixed(4))
+                : Number((trade.entryPrice * (1 - tp1Pct)).toFixed(4));
+            }
+          }
+          return trade;
+        });
+        b.activeTrade = b.activeTrades[0] || null;
+        b.allocatedBalance = Number(b.activeTrades.reduce((acc, t) => acc + t.capitalAllocated, 0).toFixed(2));
+      }
       this.bots.set(b.id, b);
     }
     this.allTrades = Array.isArray(data.allTrades) ? data.allTrades : [];
@@ -59,7 +85,7 @@ class TradingEngine {
     if (data.telegramConfig) {
       telegramService.updateConfig(data.telegramConfig);
     }
-    console.log(`[TradingEngine] Successfully restored 24x7 state: ${this.bots.size} bots, ${this.allTrades.length} historical trades, ${this.getLiveTrades().length} live trades.`);
+    console.log(`[TradingEngine] Successfully restored 24x7 state: ${this.bots.size} bots, ${this.allTrades.length} historical trades, ${this.getLiveTrades().length} live trades (migrated to 3% capital & TP1 < SL).`);
   }
 
   public savePersistentState(immediate = false) {
@@ -102,28 +128,30 @@ class TradingEngine {
         : ((entryPrice - currentPrice) / entryPrice);
 
       const leverage = bot.strategy.defaultLeverage || 10;
-      const capitalAllocated = Math.min(5.0, Number((bot.currentBalance * 0.05).toFixed(2)));
+      const capitalAllocated = Math.max(0.50, Number((bot.currentBalance * 0.03).toFixed(2)));
       const positionNotional = capitalAllocated * leverage;
       const amount = Number((positionNotional / entryPrice).toFixed(6));
 
-      const stopLossDist = Math.max(0.008, Number((0.50 / leverage).toFixed(4)));
+      // Dynamic Stop Loss: max loss is strictly 1.5% of dynamic capital
+      const stopLossDist = Number((0.50 / leverage).toFixed(4));
       const stopLoss = direction === 'LONG'
         ? Number((entryPrice * (1 - stopLossDist)).toFixed(coin.price < 1 ? 4 : 2))
         : Number((entryPrice * (1 + stopLossDist)).toFixed(coin.price < 1 ? 4 : 2));
 
-      const tp1Pct = Math.max(0.012, Number((0.18 / Math.sqrt(leverage)).toFixed(4)));
+      // TP1 strictly closer than SL compared to entry price
+      const tp1Pct = Number((stopLossDist * 0.60).toFixed(4));
       const tp1Price = direction === 'LONG'
         ? Number((entryPrice * (1 + tp1Pct)).toFixed(coin.price < 1 ? 4 : 2))
         : Number((entryPrice * (1 - tp1Pct)).toFixed(coin.price < 1 ? 4 : 2));
 
-      const tp2Pct = Math.max(0.024, Number((0.35 / Math.sqrt(leverage)).toFixed(4)));
+      const tp2Pct = Number((stopLossDist * 1.35).toFixed(4));
       const tp2Price = direction === 'LONG'
         ? Number((entryPrice * (1 + tp2Pct)).toFixed(coin.price < 1 ? 4 : 2))
         : Number((entryPrice * (1 - tp2Pct)).toFixed(coin.price < 1 ? 4 : 2));
 
       const takeProfit = direction === 'LONG'
-        ? Number((entryPrice * 1.06).toFixed(coin.price < 1 ? 4 : 2))
-        : Number((entryPrice * 0.94).toFixed(coin.price < 1 ? 4 : 2));
+        ? Number((entryPrice * (1 + stopLossDist * 2.50)).toFixed(coin.price < 1 ? 4 : 2))
+        : Number((entryPrice * (1 - stopLossDist * 2.50)).toFixed(coin.price < 1 ? 4 : 2));
 
       const ruleResults = this.evaluate10Rules(bot.strategy.coreArchetype, direction, coin, bot.brain.adaptiveWeights);
       const confirmedRulesCount = ruleResults.filter(r => r.passed).length;
@@ -304,7 +332,16 @@ class TradingEngine {
 
         // Calculate remaining unrealized PnL based on remaining active portion
         const portionRemaining = trade.tp2Hit ? 0.40 : trade.tp1Hit ? 0.65 : 1.0;
-        const unrealizedPnl = Number(((trade.capitalAllocated * portionRemaining) * priceDeltaPct * leverage).toFixed(2));
+        let unrealizedPnl = Number(((trade.capitalAllocated * portionRemaining) * priceDeltaPct * leverage).toFixed(2));
+        
+        // Strict risk envelope: Max loss before TP1 is strictly 1.5% of dynamic capital (0.50 of capitalAllocated)
+        if (!trade.tp1Hit && unrealizedPnl < 0) {
+          const maxAllowedLoss = -Number((trade.capitalAllocated * 0.50).toFixed(2));
+          if (unrealizedPnl < maxAllowedLoss) {
+            unrealizedPnl = maxAllowedLoss;
+          }
+        }
+
         const totalRealizedSoFar = (trade.tp1RealizedPnl || 0) + (trade.tp2RealizedPnl || 0);
         
         trade.pnl = Number((totalRealizedSoFar + unrealizedPnl).toFixed(2));
@@ -366,7 +403,14 @@ class TradingEngine {
     
     if (!trade.tp1Hit && !trade.tp2Hit) {
       // Normal close without partials
-      bot.currentBalance = Number(Math.max(10, bot.currentBalance + trade.pnl).toFixed(2));
+      let finalPnl = trade.pnl;
+      if (reason === 'STOP_LOSS') {
+        // Enforce max loss is strictly 1.5% of dynamic capital (0.50 of capitalAllocated)
+        const maxLoss = -Number((trade.capitalAllocated * 0.50).toFixed(2));
+        finalPnl = Math.max(finalPnl, maxLoss);
+        trade.pnl = finalPnl;
+      }
+      bot.currentBalance = Number(Math.max(10, bot.currentBalance + finalPnl).toFixed(2));
     } else {
       // Add final runner portion
       bot.currentBalance = Number(Math.max(10, bot.currentBalance + remainingPnL).toFixed(2));
@@ -1475,33 +1519,35 @@ class TradingEngine {
     // Dynamic leverage tailored specifically to this setup
     const { leverage, reason: leverageReason } = this.calculateDynamicLeverage(bot, coin, confidence, direction);
 
-    // Max 5% of Dynamic Capital per trade allocated as margin
-    const capitalAllocated = Number((bot.currentBalance * 0.05).toFixed(2));
+    // Dynamic Capital per trade: Exactly 3% of dynamic balance
+    const capitalAllocated = Math.max(0.50, Number((bot.currentBalance * 0.03).toFixed(2)));
     
-    // Strict Dynamic Stop-Loss scaled to chosen leverage:
-    // Ensures max loss never exceeds ~2.5% - 3.0% of total bot capital ($2.50-$3.00 on a $100 balance)
-    const maxMarginRiskPct = 0.50; // max 50% loss on margin = 2.5% loss on bot equity
-    const stopLossPct = Math.max(0.006, Number((maxMarginRiskPct / leverage).toFixed(4)));
+    // Strict Dynamic Stop-Loss with Dynamic Leverage:
+    // Max loss is strictly 1.5% of dynamic capital (0.015 * bot.currentBalance).
+    // Formula: capitalAllocated (3%) * leverage * stopLossPct = 1.5% * dynamic balance
+    // stopLossPct = 0.015 / (0.03 * leverage) = 0.50 / leverage
+    const stopLossPct = Number((0.50 / leverage).toFixed(4));
 
     const stopLoss = direction === 'LONG'
       ? Number((entryPrice * (1 - stopLossPct)).toFixed(4))
       : Number((entryPrice * (1 + stopLossPct)).toFixed(4));
 
-    // Multi-stage TP targets scaled for leverage & realistic volatility:
-    // TP 1: +1.2% to +2.0% price move -> With dynamic leverage, produces +15% to +35% ROI on margin!
-    const tp1Pct = Math.max(0.010, Number((0.18 / Math.sqrt(leverage)).toFixed(4)));
+    // TP1 is strictly closer than SL compared to entry price:
+    // Distance |tp1Price - entryPrice| < |stopLoss - entryPrice|
+    // Set to 60% of stopLossPct, guaranteeing TP1 is closer than SL
+    const tp1Pct = Number((stopLossPct * 0.60).toFixed(4));
     const tp1Price = direction === 'LONG'
       ? Number((entryPrice * (1 + tp1Pct)).toFixed(4))
       : Number((entryPrice * (1 - tp1Pct)).toFixed(4));
 
-    // TP 2: +2.5% to +4.0% price move -> Book 25% initial margin & Move SL to TP1
-    const tp2Pct = Math.max(0.022, Number((0.35 / Math.sqrt(leverage)).toFixed(4)));
+    // TP 2: Dynamic expansion target (1.35x of SL distance) -> Book 25% initial margin & Move SL to TP1
+    const tp2Pct = Number((stopLossPct * 1.35).toFixed(4));
     const tp2Price = direction === 'LONG'
       ? Number((entryPrice * (1 + tp2Pct)).toFixed(4))
       : Number((entryPrice * (1 - tp2Pct)).toFixed(4));
 
-    // Macro Full Expansion TP (+4.5% - +7.5%)
-    const fullTpPct = Math.max(0.040, Number((0.65 / Math.sqrt(leverage)).toFixed(4)));
+    // Macro Full Expansion TP (2.5x of SL distance)
+    const fullTpPct = Number((stopLossPct * 2.50).toFixed(4));
     const takeProfit = direction === 'LONG'
       ? Number((entryPrice * (1 + fullTpPct)).toFixed(4))
       : Number((entryPrice * (1 - fullTpPct)).toFixed(4));

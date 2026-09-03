@@ -169,7 +169,7 @@ export const AllTradesView: React.FC<AllTradesViewProps> = ({
                   <th className="p-2.5">Leverage</th>
                   <th className="p-2.5">Entry Price</th>
                   <th className="p-2.5">Current Price</th>
-                  <th className="p-2.5">Allocated (5%)</th>
+                  <th className="p-2.5">Allocated (3%)</th>
                   <th className="p-2.5">Multi-Stage TP / SL Progress</th>
                   <th className="p-2.5">Live Mark PnL</th>
                 </tr>

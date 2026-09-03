@@ -319,9 +319,9 @@ export const Cmc500View: React.FC<Cmc500ViewProps> = ({
                 const activeTradesOnCoin = coinActiveTrades.get(coin.symbol) || [];
                 const mtfScore = coin.mtf.confluenceScore;
                 
-                // Calculated target previews
-                const longTp1 = Number((coin.price * 1.018).toFixed(coin.price < 1 ? 4 : 2));
-                const longTp2 = Number((coin.price * 1.038).toFixed(coin.price < 1 ? 4 : 2));
+                // Calculated target previews (TP1 closer than SL)
+                const longTp1 = Number((coin.price * 1.012).toFixed(coin.price < 1 ? 4 : 2));
+                const longTp2 = Number((coin.price * 1.032).toFixed(coin.price < 1 ? 4 : 2));
 
                 return (
                   <tr 

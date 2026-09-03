@@ -260,8 +260,8 @@ export const BotDetailModal: React.FC<BotDetailModalProps> = ({
 
                 <div className="rounded-xl border border-slate-800 bg-slate-950/60 p-3">
                   <div className="text-[11px] text-slate-400">Dynamic Risk Envelope</div>
-                  <div className="mt-1 font-mono text-base font-bold text-cyan-300">Max 5% / 3% SL</div>
-                  <div className="text-[10px] text-slate-500">${(bot.currentBalance * 0.05).toFixed(2)} capital / trade</div>
+                  <div className="mt-1 font-mono text-base font-bold text-cyan-300">3% Cap / 1.5% SL</div>
+                  <div className="text-[10px] text-slate-500">${(bot.currentBalance * 0.03).toFixed(2)} capital (TP1 &lt; SL)</div>
                 </div>
               </div>
 

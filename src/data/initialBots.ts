@@ -183,7 +183,7 @@ export function generateInitialBots(): Bot[] {
         learningNotes: [
           `Neural memory initialized for ${name}. Base strategy: ${tpl.archetype}.`,
           `Dynamic leverage active: Scaled dynamically from 2x up to ${tpl.maxLeverage}x based on trade confluence & volatility.`,
-          `Risk limits armed: Max 5% capital per trade ($5.00), Strict max 3% stop loss ($3.00 max risk).`,
+          `Risk limits armed: 3% dynamic capital per trade, Max 1.5% stop loss of dynamic capital with dynamic leverage, TP1 closer than SL.`,
           `Multi-timeframe scanner synced to live crypto market (excluding high-decimal/sub-cent meme coins).`,
         ],
         lessons: [],

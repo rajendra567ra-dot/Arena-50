@@ -109,7 +109,7 @@ export const BotCard: React.FC<BotCardProps> = ({ bot, onSelect, onReset }) => {
               ${bot.currentBalance.toFixed(2)}
             </div>
             <div className="mt-0.5 text-[11px] text-slate-400">
-              Allocated: <span className="font-mono text-cyan-300">${(bot.currentBalance * 0.05).toFixed(2)}</span> (5%)
+              Allocated: <span className="font-mono text-cyan-300">${(bot.currentBalance * 0.03).toFixed(2)}</span> (3%)
             </div>
           </div>
 
