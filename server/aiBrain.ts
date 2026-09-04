@@ -49,7 +49,7 @@ export async function performAiBrainReflection(
         lastGeminiCallTime = Date.now();
 
         const prompt = `You are the neural cognitive core for an advanced quantitative algorithmic trading bot named "${bot.name}" (Serial: ${bot.serialNumber}).
-The bot executes automated multi-timeframe trades with strict risk management (3% dynamic capital per trade, max 1.5% stop loss of dynamic capital with dynamic leverage, and TP1 strictly closer to entry than SL).
+The bot executes automated multi-timeframe trades with strict risk management (3% dynamic capital per trade, max 1.5% stop loss of dynamic capital with dynamic leverage, and TP1 equal distance to SL from entry price).
 
 Current Strategy: ${bot.strategy.name} (${bot.strategy.coreArchetype})
 Required Indicators: ${bot.strategy.requiredIndicators.join(', ')}

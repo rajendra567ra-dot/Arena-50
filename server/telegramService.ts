@@ -138,7 +138,7 @@ class TelegramService {
         msg += `• *Mistake Filtered:* ${l.mistakeIdentified}\n  ↳ *Adaptation:* ${l.adaptationMade} (${l.parameterAdjusted})\n`;
       });
     } else {
-      msg += `• *Neural State:* All 50 bots executing strict risk rules (3% dynamic capital, Max 1.5% SL of dynamic capital, TP1 < SL). Brains continuously optimizing!\n`;
+      msg += `• *Neural State:* All 50 bots executing strict risk rules (3% dynamic capital, Max 1.5% SL of dynamic capital, TP1 = SL Dist). Brains continuously optimizing!\n`;
     }
 
     msg += `\n🤖 _Continuous 24/7 scanning active in AIC Cloud Container._`;

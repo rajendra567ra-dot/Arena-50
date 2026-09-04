@@ -28,7 +28,7 @@ export const LiveTradesTicker: React.FC<LiveTradesTickerProps> = ({ liveTrades, 
             Active Live Trades ({liveTrades.length})
           </h3>
         </div>
-        <span className="text-xs text-slate-400">Dynamic Capital: 3% / Trade | Max Loss Cap: 1.5% (TP1 &lt; SL)</span>
+        <span className="text-xs text-slate-400">Dynamic Capital: 3% / Trade | Max Loss Cap: 1.5% (TP1 = SL Dist)</span>
       </div>
 
       <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">

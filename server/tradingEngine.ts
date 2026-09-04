@@ -47,31 +47,16 @@ class TradingEngine {
   private restoreFromPersistentData(data: PersistentArenaData) {
     this.bots.clear();
     for (const b of data.bots) {
-      // Migrate active trades to new parameters (3% dynamic capital, max 1.5% SL, TP1 closer than SL)
+      // Keep all data as it is, ensuring TP1 distance from entry equals SL distance from entry
       if (b.activeTrades && b.activeTrades.length > 0) {
         b.activeTrades = b.activeTrades.map(trade => {
-          if (trade.status === 'OPEN') {
-            const lev = trade.leverage || 10;
-            const newCap = Math.max(0.50, Number((b.currentBalance * 0.03).toFixed(2)));
-            const slPct = Number((0.50 / lev).toFixed(4));
-            const tp1Pct = Number((slPct * 0.60).toFixed(4));
-            const isLong = trade.direction === 'LONG';
-
-            trade.capitalAllocated = newCap;
-            trade.remainingCapital = newCap;
-            if (!trade.tp1Hit) {
-              trade.stopLoss = isLong
-                ? Number((trade.entryPrice * (1 - slPct)).toFixed(4))
-                : Number((trade.entryPrice * (1 + slPct)).toFixed(4));
-              trade.tp1Price = isLong
-                ? Number((trade.entryPrice * (1 + tp1Pct)).toFixed(4))
-                : Number((trade.entryPrice * (1 - tp1Pct)).toFixed(4));
-            }
+          if (trade.status === 'OPEN' && !trade.tp1Hit) {
+            // Formula: 2 * entryPrice - stopLoss guarantees |tp1Price - entryPrice| === |stopLoss - entryPrice|
+            trade.tp1Price = Number((2 * trade.entryPrice - trade.stopLoss).toFixed(6));
           }
           return trade;
         });
         b.activeTrade = b.activeTrades[0] || null;
-        b.allocatedBalance = Number(b.activeTrades.reduce((acc, t) => acc + t.capitalAllocated, 0).toFixed(2));
       }
       this.bots.set(b.id, b);
     }
@@ -85,7 +70,7 @@ class TradingEngine {
     if (data.telegramConfig) {
       telegramService.updateConfig(data.telegramConfig);
     }
-    console.log(`[TradingEngine] Successfully restored 24x7 state: ${this.bots.size} bots, ${this.allTrades.length} historical trades, ${this.getLiveTrades().length} live trades (migrated to 3% capital & TP1 < SL).`);
+    console.log(`[TradingEngine] Successfully restored 24x7 state: ${this.bots.size} bots, ${this.allTrades.length} historical trades, ${this.getLiveTrades().length} live trades (TP1 = SL distance from entry).`);
   }
 
   public savePersistentState(immediate = false) {
@@ -138,11 +123,8 @@ class TradingEngine {
         ? Number((entryPrice * (1 - stopLossDist)).toFixed(coin.price < 1 ? 4 : 2))
         : Number((entryPrice * (1 + stopLossDist)).toFixed(coin.price < 1 ? 4 : 2));
 
-      // TP1 strictly closer than SL compared to entry price
-      const tp1Pct = Number((stopLossDist * 0.60).toFixed(4));
-      const tp1Price = direction === 'LONG'
-        ? Number((entryPrice * (1 + tp1Pct)).toFixed(coin.price < 1 ? 4 : 2))
-        : Number((entryPrice * (1 - tp1Pct)).toFixed(coin.price < 1 ? 4 : 2));
+      // TP1 equal distance of SL compared to entry price (|tp1Price - entryPrice| === |stopLoss - entryPrice|)
+      const tp1Price = Number((2 * entryPrice - stopLoss).toFixed(coin.price < 1 ? 4 : 2));
 
       const tp2Pct = Number((stopLossDist * 1.35).toFixed(4));
       const tp2Price = direction === 'LONG'
@@ -1532,13 +1514,9 @@ class TradingEngine {
       ? Number((entryPrice * (1 - stopLossPct)).toFixed(4))
       : Number((entryPrice * (1 + stopLossPct)).toFixed(4));
 
-    // TP1 is strictly closer than SL compared to entry price:
-    // Distance |tp1Price - entryPrice| < |stopLoss - entryPrice|
-    // Set to 60% of stopLossPct, guaranteeing TP1 is closer than SL
-    const tp1Pct = Number((stopLossPct * 0.60).toFixed(4));
-    const tp1Price = direction === 'LONG'
-      ? Number((entryPrice * (1 + tp1Pct)).toFixed(4))
-      : Number((entryPrice * (1 - tp1Pct)).toFixed(4));
+    // TP1 is equal distance of SL compared to entry price:
+    // Distance |tp1Price - entryPrice| === |stopLoss - entryPrice|
+    const tp1Price = Number((2 * entryPrice - stopLoss).toFixed(4));
 
     // TP 2: Dynamic expansion target (1.35x of SL distance) -> Book 25% initial margin & Move SL to TP1
     const tp2Pct = Number((stopLossPct * 1.35).toFixed(4));

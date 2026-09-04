@@ -85,7 +85,7 @@ export interface Trade {
   stopLoss: number; // Dynamic SL (max 1.5% loss of dynamic capital with dynamic leverage)
   initialStopLoss?: number;
   takeProfit: number;
-  tp1Price: number; // Stage 1 TP (strictly closer to entry than SL) -> Books 35% profit & moves SL to Entry
+  tp1Price: number; // Stage 1 TP (equal distance of SL compared to entry price) -> Books 35% profit & moves SL to Entry
   tp2Price: number; // Stage 2 TP -> Books 25% margin & moves SL to TP1
   tp1Hit?: boolean;
   tp2Hit?: boolean;
