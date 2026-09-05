@@ -206,6 +206,12 @@ export interface MarketCoin {
   low24h: number;
   volume24h: number;
   marketCapRank: number;
+  rank?: number;
+  category?: string;
+  contractAddress: string;
+  network: string;
+  isVerified: boolean;
+  explorerUrl: string;
   indicators: IndicatorSignals;
   mtf: MultiTimeframeAnalysis;
   lastUpdated: number;

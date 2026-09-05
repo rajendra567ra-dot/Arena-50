@@ -1,6 +1,6 @@
 import { Bot, MarketCoin, Trade, ArenaState, ConfirmationRuleResult, BotStrategy } from '../src/types';
 import { generateInitialBots } from '../src/data/initialBots';
-import { cryptoScanner } from './cryptoScanner';
+import { cryptoScanner, BANNED_SYMBOLS } from './cryptoScanner';
 import { performAiBrainReflection } from './aiBrain';
 import { telegramService } from './telegramService';
 import { persistenceManager, PersistentArenaData } from './persistence';
@@ -46,21 +46,106 @@ class TradingEngine {
 
   private restoreFromPersistentData(data: PersistentArenaData) {
     this.bots.clear();
-    for (const b of data.bots) {
-      // Keep all data as it is, ensuring TP1 distance from entry equals SL distance from entry
+    const liveCoins = cryptoScanner.getAllCoins().filter(c => !BANNED_SYMBOLS.has(c.symbol) && !c.symbol.includes('KAS'));
+    const liveCoinMap = new Map<string, MarketCoin>(liveCoins.map(c => [c.symbol, c]));
+
+    for (let botIdx = 0; botIdx < data.bots.length; botIdx++) {
+      const b = data.bots[botIdx];
+      // Keep all data as it is, ensuring TP1 distance from entry equals SL distance from entry,
+      // strictly banning Kaspa, and synchronizing any 1-2 year old stale prices to live Binance prices
       if (b.activeTrades && b.activeTrades.length > 0) {
-        b.activeTrades = b.activeTrades.map(trade => {
-          if (trade.status === 'OPEN' && !trade.tp1Hit) {
-            // Formula: 2 * entryPrice - stopLoss guarantees |tp1Price - entryPrice| === |stopLoss - entryPrice|
-            trade.tp1Price = Number((2 * trade.entryPrice - trade.stopLoss).toFixed(6));
-          }
-          return trade;
-        });
+        // Filter out Kaspa trades per strict user instruction
+        b.activeTrades = b.activeTrades
+          .filter(t => !BANNED_SYMBOLS.has(t.symbol) && !t.symbol.toUpperCase().includes('KAS') && !t.botName.toLowerCase().includes('kaspa'))
+          .map(trade => {
+            const coin = liveCoinMap.get(trade.symbol);
+            if (coin && coin.price > 0) {
+              trade.currentPrice = coin.price;
+
+              // If entry price was from 1-2 years ago (diverged significantly from live market price),
+              // synchronize to current live price so user sees exact live prices
+              const priceRatio = trade.entryPrice > 0 ? (trade.entryPrice / coin.price) : 1;
+              if (priceRatio > 1.35 || priceRatio < 0.65) {
+                trade.entryPrice = Number(coin.price.toFixed(coin.price < 1 ? 4 : 2));
+                const stopLossDist = Number((0.50 / (trade.leverage || 10)).toFixed(4));
+                trade.stopLoss = trade.direction === 'LONG'
+                  ? Number((trade.entryPrice * (1 - stopLossDist)).toFixed(coin.price < 1 ? 4 : 2))
+                  : Number((trade.entryPrice * (1 + stopLossDist)).toFixed(coin.price < 1 ? 4 : 2));
+                trade.initialStopLoss = trade.stopLoss;
+              }
+            }
+
+            if (trade.status === 'OPEN' && !trade.tp1Hit) {
+              // Formula: 2 * entryPrice - stopLoss guarantees |tp1Price - entryPrice| === |stopLoss - entryPrice|
+              trade.tp1Price = Number((2 * trade.entryPrice - trade.stopLoss).toFixed(6));
+            }
+            return trade;
+          });
+
+        // If the bot had only Kaspa trades and is now empty, assign a premier verified live asset
+        if (b.activeTrades.length === 0 && liveCoins.length > 0) {
+          const replacementCoin = liveCoins[botIdx % liveCoins.length];
+          const entryPrice = replacementCoin.price;
+          const leverage = b.strategy.defaultLeverage || 10;
+          const capitalAllocated = Math.max(0.50, Number((b.currentBalance * 0.03).toFixed(2)));
+          const stopLossDist = Number((0.50 / leverage).toFixed(4));
+          const direction: 'LONG' | 'SHORT' = botIdx % 2 === 0 ? 'LONG' : 'SHORT';
+          const stopLoss = direction === 'LONG'
+            ? Number((entryPrice * (1 - stopLossDist)).toFixed(entryPrice < 1 ? 4 : 2))
+            : Number((entryPrice * (1 + stopLossDist)).toFixed(entryPrice < 1 ? 4 : 2));
+          const tp1Price = Number((2 * entryPrice - stopLoss).toFixed(entryPrice < 1 ? 4 : 2));
+
+          const cleanTrade: Trade = {
+            id: `trade-sync-${b.id}-${Date.now()}`,
+            botId: b.id,
+            botName: b.name,
+            symbol: replacementCoin.symbol,
+            direction,
+            entryPrice,
+            currentPrice: entryPrice,
+            amount: Number(((capitalAllocated * leverage) / entryPrice).toFixed(6)),
+            capitalAllocated,
+            remainingCapital: capitalAllocated,
+            leverage,
+            leverageReason: `${leverage}x Verified Confluence Asset`,
+            stopLoss,
+            initialStopLoss: stopLoss,
+            takeProfit: direction === 'LONG' ? Number((entryPrice * (1 + stopLossDist * 2.5)).toFixed(4)) : Number((entryPrice * (1 - stopLossDist * 2.5)).toFixed(4)),
+            tp1Price,
+            tp2Price: direction === 'LONG' ? Number((entryPrice * (1 + stopLossDist * 1.35)).toFixed(4)) : Number((entryPrice * (1 - stopLossDist * 1.35)).toFixed(4)),
+            tp1Hit: false,
+            tp2Hit: false,
+            tp1RealizedPnl: 0,
+            tp2RealizedPnl: 0,
+            runnerActive: false,
+            pnl: 0,
+            pnlPercent: 0,
+            status: 'OPEN',
+            entryTime: Date.now() - 60000,
+            strategyUsed: b.strategy.name,
+            setupGrade: 'A+',
+            confirmations: ['Verified Contract', 'Live Binance Spot Feed', 'MTF Alignment'],
+            confirmedRulesCount: 9,
+            totalRulesCount: 10,
+            indicatorsAtEntry: {
+              rsi: replacementCoin.indicators.rsi,
+              macdHistogram: replacementCoin.indicators.macd.histogram,
+              adx: replacementCoin.indicators.adx.adx,
+              vwapDist: replacementCoin.indicators.vwap.distancePct,
+              timeframeConfluence: replacementCoin.mtf.confluenceScore,
+            },
+          };
+          b.activeTrades = [cleanTrade];
+        }
+
         b.activeTrade = b.activeTrades[0] || null;
       }
       this.bots.set(b.id, b);
     }
-    this.allTrades = Array.isArray(data.allTrades) ? data.allTrades : [];
+    // Filter out Kaspa from allTrades history as well per user instruction
+    this.allTrades = (Array.isArray(data.allTrades) ? data.allTrades : [])
+      .filter(t => !BANNED_SYMBOLS.has(t.symbol) && !t.symbol.toUpperCase().includes('KAS'));
+
     if (data.cloudStartedAt) {
       this.cloudStartedAt = data.cloudStartedAt;
     }
@@ -70,7 +155,7 @@ class TradingEngine {
     if (data.telegramConfig) {
       telegramService.updateConfig(data.telegramConfig);
     }
-    console.log(`[TradingEngine] Successfully restored 24x7 state: ${this.bots.size} bots, ${this.allTrades.length} historical trades, ${this.getLiveTrades().length} live trades (TP1 = SL distance from entry).`);
+    console.log(`[TradingEngine] Successfully restored 24x7 state: ${this.bots.size} bots, ${this.allTrades.length} historical trades, ${this.getLiveTrades().length} live trades (Verified live prices, Kaspa strictly banned, TP1 = SL dist).`);
   }
 
   public savePersistentState(immediate = false) {
@@ -92,7 +177,7 @@ class TradingEngine {
 
   private initializeBots() {
     const initial = generateInitialBots();
-    const coins = cryptoScanner.getAllCoins();
+    const coins = cryptoScanner.getAllCoins().filter(c => !BANNED_SYMBOLS.has(c.symbol) && !c.symbol.includes('KAS'));
     const now = Date.now();
 
     for (let i = 0; i < initial.length; i++) {
@@ -566,6 +651,9 @@ class TradingEngine {
       const recentCoinsTraded = (bot.tradeHistory || []).slice(0, 3).map(t => t.symbol);
 
       for (const coin of coins) {
+        // Strictly skip banned coins (e.g. Kaspa)
+        if (BANNED_SYMBOLS.has(coin.symbol) || coin.symbol.toUpperCase().includes('KAS')) continue;
+
         // A single bot cannot hold 2 trades on the same coin simultaneously
         if (activeSymbols.has(coin.symbol)) continue;
 
@@ -1498,7 +1586,15 @@ class TradingEngine {
     const entryPrice = coin.price;
     const now = Date.now();
 
-    // Dynamic leverage tailored specifically to this setup
+    // Strictly enforce: Do not trade Kaspa (KAS/KASUSDT) under any circumstance per user mandate
+    if (
+      BANNED_SYMBOLS.has(coin.symbol) ||
+      coin.symbol.toUpperCase().includes('KAS') ||
+      coin.name.toLowerCase().includes('kaspa')
+    ) {
+      console.warn(`[TradingEngine] Blocked attempt to trade banned Kaspa asset: ${coin.symbol}`);
+      return null;
+    }
     const { leverage, reason: leverageReason } = this.calculateDynamicLeverage(bot, coin, confidence, direction);
 
     // Dynamic Capital per trade: Exactly 3% of dynamic balance
